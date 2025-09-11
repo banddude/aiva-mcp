@@ -53,9 +53,11 @@ enum ServiceRegistry {
         CaptureService.shared,
         ContactsService.shared,
         LocationService.shared,
+        MailService.shared,
         MapsService.shared,
         MessageService.shared,
         RemindersService.shared,
+        SpeechService.shared,
         UtilitiesService.shared,
         WeatherService.shared,
     ]
@@ -65,9 +67,11 @@ enum ServiceRegistry {
         captureEnabled: Binding<Bool>,
         contactsEnabled: Binding<Bool>,
         locationEnabled: Binding<Bool>,
+        mailEnabled: Binding<Bool>,
         mapsEnabled: Binding<Bool>,
         messagesEnabled: Binding<Bool>,
         remindersEnabled: Binding<Bool>,
+        speechEnabled: Binding<Bool>,
         utilitiesEnabled: Binding<Bool>,
         weatherEnabled: Binding<Bool>
     ) -> [ServiceConfig] {
@@ -101,6 +105,13 @@ enum ServiceRegistry {
                 binding: locationEnabled
             ),
             ServiceConfig(
+                name: "Mail",
+                iconName: "envelope.fill",
+                color: .indigo,
+                service: MailService.shared,
+                binding: mailEnabled
+            ),
+            ServiceConfig(
                 name: "Maps",
                 iconName: "mappin.and.ellipse",
                 color: .purple,
@@ -120,6 +131,20 @@ enum ServiceRegistry {
                 color: .orange,
                 service: RemindersService.shared,
                 binding: remindersEnabled
+            ),
+            ServiceConfig(
+                name: "Speech",
+                iconName: "speaker.wave.3.fill",
+                color: .pink,
+                service: SpeechService.shared,
+                binding: speechEnabled
+            ),
+            ServiceConfig(
+                name: "Utilities",
+                iconName: "wrench.and.screwdriver",
+                color: .gray,
+                service: UtilitiesService.shared,
+                binding: utilitiesEnabled
             ),
             ServiceConfig(
                 name: "Weather",
@@ -150,9 +175,11 @@ final class ServerController: ObservableObject {
     @AppStorage("captureEnabled") private var captureEnabled = false
     @AppStorage("contactsEnabled") private var contactsEnabled = false
     @AppStorage("locationEnabled") private var locationEnabled = false
+    @AppStorage("mailEnabled") private var mailEnabled = false
     @AppStorage("mapsEnabled") private var mapsEnabled = true  // Default for maps
     @AppStorage("messagesEnabled") private var messagesEnabled = false
     @AppStorage("remindersEnabled") private var remindersEnabled = false
+    @AppStorage("speechEnabled") private var speechEnabled = true  // Default for speech
     @AppStorage("utilitiesEnabled") private var utilitiesEnabled = true  // Default for utilities
     @AppStorage("weatherEnabled") private var weatherEnabled = false
 
@@ -166,9 +193,11 @@ final class ServerController: ObservableObject {
             captureEnabled: $captureEnabled,
             contactsEnabled: $contactsEnabled,
             locationEnabled: $locationEnabled,
+            mailEnabled: $mailEnabled,
             mapsEnabled: $mapsEnabled,
             messagesEnabled: $messagesEnabled,
             remindersEnabled: $remindersEnabled,
+            speechEnabled: $speechEnabled,
             utilitiesEnabled: $utilitiesEnabled,
             weatherEnabled: $weatherEnabled
         )
