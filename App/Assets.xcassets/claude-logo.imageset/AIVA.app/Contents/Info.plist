@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BuildMachineOSBuild</key>
+	<string>25A353</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>AIVA</string>
+	<key>CFBundleExecutable</key>
+	<string>AIVA</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.mikeshaffer.AIVA</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>AIVA</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleSupportedPlatforms</key>
+	<array>
+		<string>MacOSX</string>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>DTCompiler</key>
+	<string>com.apple.compilers.llvm.clang.1_0</string>
+	<key>DTPlatformBuild</key>
+	<string>25A5279m</string>
+	<key>DTPlatformName</key>
+	<string>macosx</string>
+	<key>DTPlatformVersion</key>
+	<string>26.0</string>
+	<key>DTSDKBuild</key>
+	<string>25A5279m</string>
+	<key>DTSDKName</key>
+	<string>macosx26.0</string>
+	<key>DTXcode</key>
+	<string>2600</string>
+	<key>DTXcodeBuild</key>
+	<string>17A5241e</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.developer-tools</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.1</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mcp._tcp</string>
+	</array>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>AIVA needs access to provide event information to the MCP server.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>AIVA  needs access to the camera to take pictures for the MCP server.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>AIVA needs access to provide contact information to the MCP server.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2025 AIVA. All rights reserved.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>AIVA uses the local network to connect to the MCP server.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>AIVA needs access to provide location information to the MCP server.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>AIVA needs access to provide location information to the MCP server.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AIVA needs access to the microphone to record audio for the MCP server.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>AIVA needs access to provide reminders information to the MCP server.</string>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://downloads.aiva.app/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>+2ibtYfPSNKpUJsn1R9Ywc1GnjQA5vemVN95d0EzGxg=</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<false/>
+	<key>UIStatusBarStyle</key>
+	<string></string>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~iphone</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

@@ -95,21 +95,10 @@ private struct ToolRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            DisclosureGroup(isExpanded: $isExpanded) {
-                ScrollView(.horizontal) {
-                    Text(prettySchema(tool.inputSchema))
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .cornerRadius(6)
-                }
-            } label: {
-                Text("Input Schema")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            // Show a concise summary of inputs instead of a static label
+            Text(inputSummary(tool.inputSchema))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 6)
     }
@@ -123,6 +112,23 @@ private struct ToolRow: View {
         return String(describing: schema)
     }
 
+    private func inputSummary(_ schema: JSONSchema) -> String {
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(schema),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return "Inputs"
+        }
+        if (obj["type"] as? String) == "object" {
+            let properties = (obj["properties"] as? [String: Any]) ?? [:]
+            let required = Set((obj["required"] as? [String]) ?? [])
+            if properties.isEmpty { return "No inputs" }
+            let keys = properties.keys.sorted()
+            let parts = keys.map { key in required.contains(key) ? "\(key)*" : key }
+            return "Inputs: " + parts.joined(separator: ", ")
+        }
+        if let type = obj["type"] as? String { return "Inputs: \(type)" }
+        return "Inputs"
+    }
     
 }
 

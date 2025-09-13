@@ -15,6 +15,10 @@
 	<key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
 	<array>
 		<string>/Users/*/Library/Messages/</string>
+		<string>/Users/*/.claude.json</string>
+		<string>/Users/*/.gemini/</string>
+		<string>/Users/*/.codex/</string>
+		<string>/Users/*/Library/Application Support/Claude/</string>
 	</array>
 	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
 	<array>

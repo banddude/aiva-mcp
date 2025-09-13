@@ -182,122 +182,70 @@ struct ContentView: View {
     }
     
     static func checkIfAIVAInCLI() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", "jq -e '.mcpServers.aiva' \"$HOME/.claude.json\" >/dev/null 2>&1"]
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
+        let path = (FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json").path)
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let servers = json["mcpServers"] as? [String: Any]
+        else { return false }
+        return servers["aiva"] != nil
     }
     
     static func checkIfAIVAInGemini() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", "jq -e '.mcpServers.aiva' \"$HOME/.gemini/settings.json\" >/dev/null 2>&1"]
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
+        let path = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".gemini/settings.json").path
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let servers = json["mcpServers"] as? [String: Any]
+        else { return false }
+        return servers["aiva"] != nil
     }
     
     static func checkIfAIVAInCodex() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", "grep -q '\\[mcp_servers\\.aiva\\]' \"$HOME/.codex/config.toml\" 2>/dev/null"]
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
+        let path = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex/config.toml").path
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return false }
+        return text.contains("[mcp_servers.aiva]")
     }
     
     static func checkIfAIVAInClaudeDesktop() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = ["-c", "jq -e '.mcpServers.aiva' \"$HOME/Library/Application Support/Claude/claude_desktop_config.json\" >/dev/null 2>&1"]
-        
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
+        let path = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Claude/claude_desktop_config.json").path
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let servers = json["mcpServers"] as? [String: Any]
+        else { return false }
+        return servers["aiva"] != nil
     }
     
     private func performToggleAction(_ newValue: Bool) {
         let serverPath = Bundle.main.bundleURL
             .appendingPathComponent("Contents/MacOS/aiva-server")
             .path
-        
         Task {
-            let command = """
-            # Edit Claude config JSON directly
-            CLAUDE_CONFIG="$HOME/.claude.json"
-            BACKUP_CONFIG="$HOME/.claude.json.backup.$(date +%s)"
-            
-            # Backup the config
-            cp "$CLAUDE_CONFIG" "$BACKUP_CONFIG"
-            echo "Backed up config to: $BACKUP_CONFIG"
-            
-            if [ "\(newValue)" = "true" ]; then
-                # Add aiva
-                jq '.mcpServers.aiva = {
-                    "type": "stdio",
-                    "command": "\(serverPath)",
-                    "args": [],
-                    "env": {}
-                }' "$CLAUDE_CONFIG" > "$CLAUDE_CONFIG.tmp" && mv "$CLAUDE_CONFIG.tmp" "$CLAUDE_CONFIG"
-                echo "Added AIVA to Claude Code CLI config"
-            else
-                # Remove aiva
-                jq 'del(.mcpServers.aiva)' "$CLAUDE_CONFIG" > "$CLAUDE_CONFIG.tmp" && mv "$CLAUDE_CONFIG.tmp" "$CLAUDE_CONFIG"
-                echo "Removed AIVA from Claude Code CLI config"
-            fi
-            """
-            
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/bash")
-            process.arguments = ["-c", command]
-            
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            
+            let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
             do {
-                try process.run()
-                process.waitUntilExit()
-                
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                
-                if process.terminationStatus == 0 {
-                    print("Claude Code CLI operation successful: \(output)")
+                var root: [String: Any] = [:]
+                if let data = try? Data(contentsOf: url),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    root = obj
+                }
+                var servers = root["mcpServers"] as? [String: Any] ?? [:]
+                if newValue {
+                    servers["aiva"] = [
+                        "type": "stdio",
+                        "command": serverPath,
+                        "args": [],
+                        "env": [:]
+                    ]
                 } else {
-                    print("Failed Claude Code CLI operation: \(output)")
-                    // Revert the toggle if the operation failed
-                    await MainActor.run {
-                        isInClaudeCodeCLI = !newValue
-                    }
+                    servers.removeValue(forKey: "aiva")
                 }
+                root["mcpServers"] = servers
+                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+                try data.write(to: url, options: .atomic)
             } catch {
-                print("Failed to run command: \(error)")
-                // Revert the toggle if the operation failed
-                await MainActor.run {
-                    isInClaudeCodeCLI = !newValue
-                }
+                print("Failed to update Claude Code CLI config: \(error)")
+                await MainActor.run { isInClaudeCodeCLI = !newValue }
             }
         }
     }
@@ -332,37 +280,40 @@ struct ContentView: View {
             fi
             """
             
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/bash")
-            process.arguments = ["-c", command]
-            
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            
+            // Native write (sandbox-safe): update ~/.gemini/settings.json
             do {
-                try process.run()
-                process.waitUntilExit()
-                
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                
-                if process.terminationStatus == 0 {
-                    print("Gemini CLI operation successful: \(output)")
+                let url = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".gemini/settings.json")
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                var root: [String: Any] = [:]
+                if let data = try? Data(contentsOf: url),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    root = obj
+                }
+                var servers = root["mcpServers"] as? [String: Any] ?? [:]
+                if newValue {
+                    servers["aiva"] = [
+                        "command": serverPath,
+                        "args": [],
+                        "trust": true
+                    ]
                 } else {
-                    print("Failed Gemini CLI operation: \(output)")
-                    // Revert the toggle if the operation failed
-                    await MainActor.run {
-                        isInGemini = !newValue
-                    }
+                    servers.removeValue(forKey: "aiva")
                 }
+                root["mcpServers"] = servers
+                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+                try data.write(to: url, options: .atomic)
             } catch {
-                print("Failed to run Gemini command: \(error)")
-                // Revert the toggle if the operation failed
-                await MainActor.run {
-                    isInGemini = !newValue
-                }
+                print("Gemini JSON write failed: \(error)")
             }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/echo")
+            process.arguments = [command]
+            do { try process.run(); process.waitUntilExit() } catch {}
         }
     }
     
@@ -400,6 +351,33 @@ struct ContentView: View {
             fi
             """
             
+            // Native write (sandbox-safe): update ~/.codex/config.toml
+            do {
+                let url = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".codex/config.toml")
+                var text = (try? String(contentsOf: url)) ?? ""
+                if newValue {
+                    if !text.contains("[mcp_servers.aiva]") {
+                        text.append("\n[mcp_servers.aiva]\ncommand = \"\(serverPath)\"\nargs = []\n")
+                    }
+                } else {
+                    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                    var filtered: [Substring] = []
+                    var skipping = false
+                    for line in lines {
+                        let trimmed = line.trimmingCharacters(in: .whitespaces)
+                        if trimmed == "[mcp_servers.aiva]" { skipping = true; continue }
+                        if skipping, trimmed.hasPrefix("[") { skipping = false }
+                        if !skipping { filtered.append(line) }
+                    }
+                    text = filtered.joined(separator: "\n")
+                }
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                print("Codex TOML write failed: \(error)")
+            }
+
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/bash")
             process.arguments = ["-c", command]
@@ -472,6 +450,35 @@ struct ContentView: View {
             fi
             """
             
+            // Native write (sandbox-safe): update Claude Desktop config JSON
+            do {
+                let url = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Library/Application Support/Claude/claude_desktop_config.json")
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                var root: [String: Any] = [:]
+                if let data = try? Data(contentsOf: url),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    root = obj
+                }
+                var servers = root["mcpServers"] as? [String: Any] ?? [:]
+                if newValue {
+                    servers["aiva"] = [
+                        "command": serverPath,
+                        "args": []
+                    ]
+                } else {
+                    servers.removeValue(forKey: "aiva")
+                }
+                root["mcpServers"] = servers
+                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+                try data.write(to: url, options: .atomic)
+            } catch {
+                print("Claude Desktop JSON write failed: \(error)")
+            }
+
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/bash")
             process.arguments = ["-c", command]
