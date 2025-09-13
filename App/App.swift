@@ -8,12 +8,16 @@ struct App: SwiftUI.App {
     @State private var isMenuPresented = false
 
     var body: some Scene {
-        MenuBarExtra("AIVA", image: #"MenuIcon-\#(isEnabled ? "On" : "Off")"#) {
+        MenuBarExtra {
             ContentView(
                 serverManager: serverController,
                 isEnabled: $isEnabled,
                 isMenuPresented: $isMenuPresented
             )
+        } label: {
+            Text(isEnabled ? "AIVA" : "aiva")
+                .font(.system(size: 12, weight: .medium))
+                .id(isEnabled)
         }
         .menuBarExtraStyle(.window)
         .menuBarExtraAccess(isPresented: $isMenuPresented)

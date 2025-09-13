@@ -11,10 +11,9 @@ struct ConnectionApprovalView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             // Icon
-            Image(.menuIconOn)
-                .resizable()
+            Image(systemName: "brain")
+                .font(.system(size: 48))
                 .foregroundColor(.accentColor)
-                .aspectRatio(contentMode: .fit)
                 .frame(width: 64, height: 64)
 
             // Title

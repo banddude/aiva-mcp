@@ -21,8 +21,8 @@ private struct AboutView: View {
     var body: some View {
         VStack {
             HStack(alignment: .top, spacing: 32) {
-                // Left column - Icon
-                Image(.icon)
+                // Left column - AIVA Logo
+                Image("Logo")
                     .resizable()
                     .frame(width: 160, height: 160)
                     .padding()

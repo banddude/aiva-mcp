@@ -1,4 +1,22 @@
 import SwiftUI
+import AppKit
+
+class SettingsWindowController: NSWindowController {
+    convenience init(serverController: ServerController) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 360),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.center()
+        window.title = "Settings"
+        window.contentView = NSHostingView(rootView: SettingsView(serverController: serverController))
+        window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 600, height: 300)
+        self.init(window: window)
+    }
+}
 
 struct SettingsView: View {
     @ObservedObject var serverController: ServerController
@@ -153,58 +171,220 @@ struct MemorySettingsView: View {
     @AppStorage("memoryNeo4jUsername") private var neo4jUsername = "neo4j"
     @AppStorage("memoryNeo4jPassword") private var neo4jPassword = "LlTnVK-QQie_GwI2xYjfSdYktv9_a0cVDF8sJB_zvgs"
     @AppStorage("memoryNeo4jDatabase") private var neo4jDatabase = "neo4j"
+    @State private var showPassword = false
+    @State private var connectionStatus: ConnectionStatus = .unknown
     
-    var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Neo4j Connection")
-                        .font(.headline)
-                    Text("Configure your Neo4j database connection for memory storage.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.bottom, 4)
-                
-                LabeledContent("Database URL:") {
-                    TextField("neo4j+s://your-instance.databases.neo4j.io", text: $neo4jUrl)
-                        .textFieldStyle(.roundedBorder)
-                }
-                
-                LabeledContent("Username:") {
-                    TextField("Username", text: $neo4jUsername)
-                        .textFieldStyle(.roundedBorder)
-                }
-                
-                LabeledContent("Password:") {
-                    SecureField("Password", text: $neo4jPassword)
-                        .textFieldStyle(.roundedBorder)
-                }
-                
-                LabeledContent("Database:") {
-                    TextField("Database name", text: $neo4jDatabase)
-                        .textFieldStyle(.roundedBorder)
-                }
-                
-                HStack {
-                    Button("Test Connection") {
-                        // TODO: Test Neo4j connection
-                    }
-                    .buttonStyle(.borderedProminent)
-                    
-                    Spacer()
-                    
-                    Button("Reset to Defaults") {
-                        neo4jUrl = "neo4j+s://54f7352a.databases.neo4j.io"
-                        neo4jUsername = "neo4j"
-                        neo4jPassword = "LlTnVK-QQie_GwI2xYjfSdYktv9_a0cVDF8sJB_zvgs"
-                        neo4jDatabase = "neo4j"
-                    }
-                    .buttonStyle(.bordered)
-                }
-                .padding(.top, 8)
+    enum ConnectionStatus {
+        case unknown
+        case connected
+        case disconnected
+        case testing
+        
+        var color: Color {
+            switch self {
+            case .unknown: return .gray
+            case .connected: return .green
+            case .disconnected: return .red
+            case .testing: return .orange
             }
         }
-        .formStyle(.grouped)
+        
+        var text: String {
+            switch self {
+            case .unknown: return "Unknown"
+            case .connected: return "Connected"
+            case .disconnected: return "Disconnected"
+            case .testing: return "Testing..."
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .unknown: return "questionmark.circle"
+            case .connected: return "checkmark.circle"
+            case .disconnected: return "xmark.circle"
+            case .testing: return "arrow.triangle.2.circlepath"
+            }
+        }
+    }
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                // Header Section
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "brain")
+                            .foregroundStyle(.blue)
+                            .font(.title2)
+                        Text("Neo4j Connection")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        // Connection Status Indicator
+                        HStack(spacing: 4) {
+                            Image(systemName: connectionStatus.icon)
+                                .foregroundStyle(connectionStatus.color)
+                                .symbolRenderingMode(.multicolor)
+                                .font(.caption)
+                                .symbolEffect(.rotate, isActive: connectionStatus == .testing)
+                            Text(connectionStatus.text)
+                                .font(.caption)
+                                .foregroundStyle(connectionStatus.color)
+                                .fontWeight(.medium)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(connectionStatus.color.opacity(0.1))
+                        .cornerRadius(6)
+                        
+                        Spacer()
+                        
+                        // Action Buttons moved to header
+                        HStack(spacing: 12) {
+                            Button("Test Connection") {
+                                testConnection()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
+                            .disabled(connectionStatus == .testing)
+                            
+                            Button("Reset to Defaults") {
+                                neo4jUrl = "neo4j+s://54f7352a.databases.neo4j.io"
+                                neo4jUsername = "neo4j"
+                                neo4jPassword = "LlTnVK-QQie_GwI2xYjfSdYktv9_a0cVDF8sJB_zvgs"
+                                neo4jDatabase = "neo4j"
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.regular)
+                        }
+                    }
+                    Text("Configure your Neo4j database connection for memory storage.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 32)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                
+                // Connection Form
+                VStack(spacing: 20) {
+                    // Database URL
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "link")
+                                .foregroundStyle(.blue)
+                                .frame(width: 16)
+                            Text("Database URL")
+                                .font(.headline)
+                                .fontWeight(.medium)
+                        }
+                        TextField("neo4j+s://your-instance.databases.neo4j.io", text: $neo4jUrl)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    
+                    // Credentials Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "person.crop.circle")
+                                .foregroundStyle(.green)
+                                .frame(width: 16)
+                            Text("Credentials")
+                                .font(.headline)
+                                .fontWeight(.medium)
+                        }
+                        
+                        VStack(spacing: 12) {
+                            // Username
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Username")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                TextField("Username", text: $neo4jUsername)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            
+                            // Password
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("Password")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Button(action: { showPassword.toggle() }) {
+                                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                
+                                if showPassword {
+                                    TextField("Password", text: $neo4jPassword)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .monospaced))
+                                } else {
+                                    SecureField("Password", text: $neo4jPassword)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .monospaced))
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Database Name
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "cylinder")
+                                .foregroundStyle(.orange)
+                                .frame(width: 16)
+                            Text("Database Name")
+                                .font(.headline)
+                                .fontWeight(.medium)
+                        }
+                        TextField("Database name", text: $neo4jDatabase)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+            }
+        }
+        .background(Color(NSColor.controlBackgroundColor))
+        .onAppear {
+            checkConnectionStatus()
+        }
+        .onChange(of: neo4jUrl) { _, _ in checkConnectionStatus() }
+        .onChange(of: neo4jUsername) { _, _ in checkConnectionStatus() }
+        .onChange(of: neo4jPassword) { _, _ in checkConnectionStatus() }
+        .onChange(of: neo4jDatabase) { _, _ in checkConnectionStatus() }
+    }
+    
+    private func testConnection() {
+        connectionStatus = .testing
+        
+        Task {
+            do {
+                // Test connection by trying to read the graph
+                let memory = MemoryService.shared
+                _ = try await memory.call(tool: "read_graph", with: [:])
+                
+                await MainActor.run {
+                    connectionStatus = .connected
+                }
+            } catch {
+                await MainActor.run {
+                    connectionStatus = .disconnected
+                }
+            }
+        }
+    }
+    
+    private func checkConnectionStatus() {
+        // Set to unknown when settings change, requiring a test
+        connectionStatus = .unknown
     }
 }
