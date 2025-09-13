@@ -30,7 +30,7 @@ final class SpeechService: Service {
                 additionalProperties: false
             ),
             annotations: .init(
-                title: "Speak Text",
+                title: "Speak",
                 readOnlyHint: false,
                 openWorldHint: false
             )

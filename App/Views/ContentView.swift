@@ -84,7 +84,7 @@ struct ContentView: View {
 
                 MenuButton("Copy server command to clipboard", isMenuPresented: $isMenuPresented) {
                     let command = Bundle.main.bundleURL
-                        .appendingPathComponent("Contents/MacOS/imcp-server")
+                        .appendingPathComponent("Contents/MacOS/aiva-server")
                         .path
 
                     let pasteboard = NSPasteboard.general
@@ -103,7 +103,7 @@ struct ContentView: View {
                     openSettings()
                 }
 
-                MenuButton("About iMCP", isMenuPresented: $isMenuPresented) {
+                MenuButton("About AIVA", isMenuPresented: $isMenuPresented) {
                     aboutWindowController.showWindow(nil)
                     NSApp.activate(ignoringOtherApps: true)
                 }

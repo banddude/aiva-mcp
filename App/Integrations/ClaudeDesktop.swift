@@ -6,7 +6,7 @@ import OSLog
 private let log = Logger.integration("claude-desktop")
 private let configPath =
     "/Users/\(NSUserName())/Library/Application Support/Claude/claude_desktop_config.json"
-private let configBookmarkKey = "me.mattt.iMCP.claudeConfigBookmark"
+private let configBookmarkKey = "me.mattt.AIVA.claudeConfigBookmark"
 
 private let jsonEncoder: JSONEncoder = {
     let encoder = JSONEncoder()
@@ -41,14 +41,14 @@ enum ClaudeDesktop {
     static func showConfigurationPanel() {
         do {
             log.debug("Loading existing Claude Desktop configuration")
-            let (config, imcpServer) = try loadConfig()
+            let (config, aivaServer) = try loadConfig()
 
             let fileExists = FileManager.default.fileExists(atPath: configPath)
 
             let alert = NSAlert()
-            alert.messageText = "Set Up iMCP Server"
+            alert.messageText = "Set Up AIVA Server"
             alert.informativeText = """
-                This will \(fileExists ? "update" : "create") the iMCP server settings in Claude Desktop.
+                This will \(fileExists ? "update" : "create") the AIVA server settings in Claude Desktop.
 
                 Location: \(configPath)
 
@@ -63,7 +63,7 @@ enum ClaudeDesktop {
             let alertResponse = alert.runModal()
             if alertResponse == .alertFirstButtonReturn {
                 log.debug("User clicked Save, updating configuration")
-                try updateConfig(config, upserting: imcpServer)
+                try updateConfig(config, upserting: aivaServer)
                 log.notice("Configuration updated successfully")
             } else {
                 log.debug("User cancelled configuration update")
@@ -114,10 +114,10 @@ private func saveSecurityScopedAccess(for url: URL) throws {
 }
 
 private func loadConfig() throws -> ([String: Value], ClaudeDesktop.Config.MCPServer) {
-    log.debug("Creating default iMCP server configuration")
-    let imcpServer = ClaudeDesktop.Config.MCPServer(
+    log.debug("Creating default AIVA server configuration")
+    let aivaServer = ClaudeDesktop.Config.MCPServer(
         command: Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/imcp-server")
+            .appendingPathComponent("Contents/MacOS/aiva-server")
             .path)
 
     var loadedConfiguration: [String: Value]?
@@ -185,24 +185,24 @@ private func loadConfig() throws -> ([String: Value], ClaudeDesktop.Config.MCPSe
             return ["mcpServers": .object([:])]
         }()
 
-    return (finalConfig, imcpServer)
+    return (finalConfig, aivaServer)
 }
 
 private func updateConfig(
     _ config: [String: Value],
-    upserting imcpServer: ClaudeDesktop.Config.MCPServer
+    upserting aivaServer: ClaudeDesktop.Config.MCPServer
 )
     throws
 {
-    // Update the iMCP server entry
+    // Update the AIVA server entry
     var updatedConfig = config
-    let imcpServerValue = try Value(imcpServer)
+    let aivaServerValue = try Value(aivaServer)
 
     if var mcpServers = config["mcpServers"]?.objectValue {
-        mcpServers["iMCP"] = imcpServerValue
+        mcpServers["AIVA"] = aivaServerValue
         updatedConfig["mcpServers"] = .object(mcpServers)
     } else {
-        updatedConfig["mcpServers"] = .object(["iMCP": imcpServerValue])
+        updatedConfig["mcpServers"] = .object(["AIVA": aivaServerValue])
     }
 
     // First try with the security-scoped URL if available
@@ -242,7 +242,7 @@ private func updateConfig(
     // Finally, show save panel as a last resort
     log.debug("Showing save panel for new configuration location")
     let savePanel = NSSavePanel()
-    savePanel.message = "Choose where to save the iMCP server settings."
+    savePanel.message = "Choose where to save the AIVA server settings."
     savePanel.prompt = "Set Up"
     savePanel.allowedContentTypes = [.json]
     savePanel.directoryURL = URL(fileURLWithPath: configPath).deletingLastPathComponent()

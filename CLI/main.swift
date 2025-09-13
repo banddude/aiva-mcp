@@ -7,7 +7,7 @@ import SystemPackage
 import struct Foundation.Data
 import class Foundation.RunLoop
 
-var log = Logger(label: "me.mattt.iMCP.server") { StreamLogHandler.standardError(label: $0) }
+var log = Logger(label: "me.mattt.AIVA.server") { StreamLogHandler.standardError(label: $0) }
 log.logLevel = .debug
 
 // Network setup
@@ -476,7 +476,7 @@ actor MCPService: Service {
             do {
                 await log.info("Starting Bonjour service discovery...")
 
-                // Find and connect to iMCP app with improved reliability
+                // Find and connect to AIVA app with improved reliability
                 let endpoint: NWEndpoint = try await withCheckedThrowingContinuation {
                     continuation in
                     let connectionState = ConnectionState()
@@ -525,23 +525,23 @@ actor MCPService: Service {
 
                             // If we have results, select the most appropriate one
                             if !results.isEmpty {
-                                // First, try to find a service with "iMCP" in the endpoint description
-                                let imcpServices = results.filter {
-                                    String(describing: $0.endpoint).contains("iMCP")
+                                // First, try to find a service with "AIVA" in the endpoint description
+                                let aivaServices = results.filter {
+                                    String(describing: $0.endpoint).contains("AIVA")
                                 }
 
                                 let selectedService: NWBrowser.Result
 
-                                if !imcpServices.isEmpty {
-                                    // Prefer services with iMCP in the description
-                                    selectedService = imcpServices.first!
+                                if !aivaServices.isEmpty {
+                                    // Prefer services with AIVA in the description
+                                    selectedService = aivaServices.first!
                                     await log.info(
-                                        "Selected iMCP service: \(selectedService.endpoint)")
+                                        "Selected AIVA service: \(selectedService.endpoint)")
                                 } else {
                                     // Fall back to the first available service
                                     selectedService = results.first!
                                     await log.info(
-                                        "No specific iMCP service found, using: \(selectedService.endpoint)"
+                                        "No specific AIVA service found, using: \(selectedService.endpoint)"
                                     )
                                 }
 

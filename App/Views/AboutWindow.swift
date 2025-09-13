@@ -10,7 +10,7 @@ class AboutWindowController: NSWindowController {
             defer: false
         )
         window.center()
-        window.title = "About iMCP"
+        window.title = "About AIVA"
         window.contentView = NSHostingView(rootView: AboutView())
         window.isReleasedWhenClosed = false
         self.init(window: window)
@@ -22,7 +22,7 @@ private struct AboutView: View {
         VStack {
             HStack(alignment: .top, spacing: 32) {
                 // Left column - Icon
-                Image(.menuIconOn)
+                Image(.icon)
                     .resizable()
                     .frame(width: 160, height: 160)
                     .padding()
@@ -30,7 +30,7 @@ private struct AboutView: View {
                 // Right column - App info and links
                 VStack(alignment: .leading, spacing: 24) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("iMCP")
+                        Text("AIVA")
                             .font(.system(size: 24, weight: .medium))
 
                         if let shortVersionString = Bundle.main.shortVersionString {
@@ -42,7 +42,7 @@ private struct AboutView: View {
 
                     Button("Report an Issue...") {
                         NSWorkspace.shared.open(
-                            URL(string: "https://github.com/mattt/iMCP/issues/new")!)
+                            URL(string: "https://github.com/banddude/AIVA/issues/new")!)
                     }
                 }
             }

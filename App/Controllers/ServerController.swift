@@ -53,8 +53,8 @@ enum ServiceRegistry {
         CaptureService.shared,
         ContactsService.shared,
         LocationService.shared,
-        MailService.shared,
         MapsService.shared,
+        MemoryService.shared,
         MessageService.shared,
         RemindersService.shared,
         SpeechService.shared,
@@ -69,6 +69,7 @@ enum ServiceRegistry {
         locationEnabled: Binding<Bool>,
         mailEnabled: Binding<Bool>,
         mapsEnabled: Binding<Bool>,
+        memoryEnabled: Binding<Bool>,
         messagesEnabled: Binding<Bool>,
         remindersEnabled: Binding<Bool>,
         speechEnabled: Binding<Bool>,
@@ -104,6 +105,8 @@ enum ServiceRegistry {
                 service: LocationService.shared,
                 binding: locationEnabled
             ),
+            // Mail service temporarily disabled
+            /*
             ServiceConfig(
                 name: "Mail",
                 iconName: "envelope.fill",
@@ -111,12 +114,20 @@ enum ServiceRegistry {
                 service: MailService.shared,
                 binding: mailEnabled
             ),
+            */
             ServiceConfig(
                 name: "Maps",
                 iconName: "mappin.and.ellipse",
                 color: .purple,
                 service: MapsService.shared,
                 binding: mapsEnabled
+            ),
+            ServiceConfig(
+                name: "Memory",
+                iconName: "brain",
+                color: .mint,
+                service: MemoryService.shared,
+                binding: memoryEnabled
             ),
             ServiceConfig(
                 name: "Messages",
@@ -177,6 +188,7 @@ final class ServerController: ObservableObject {
     @AppStorage("locationEnabled") private var locationEnabled = false
     @AppStorage("mailEnabled") private var mailEnabled = false
     @AppStorage("mapsEnabled") private var mapsEnabled = true  // Default for maps
+    @AppStorage("memoryEnabled") private var memoryEnabled = false
     @AppStorage("messagesEnabled") private var messagesEnabled = false
     @AppStorage("remindersEnabled") private var remindersEnabled = false
     @AppStorage("speechEnabled") private var speechEnabled = true  // Default for speech
@@ -195,6 +207,7 @@ final class ServerController: ObservableObject {
             locationEnabled: $locationEnabled,
             mailEnabled: $mailEnabled,
             mapsEnabled: $mapsEnabled,
+            memoryEnabled: $memoryEnabled,
             messagesEnabled: $messagesEnabled,
             remindersEnabled: $remindersEnabled,
             speechEnabled: $speechEnabled,
@@ -331,7 +344,7 @@ final class ServerController: ObservableObject {
     private func sendClientConnectionNotification(clientName: String) {
         let content = UNMutableNotificationContent()
         content.title = "Client Connected"
-        content.body = "Client '\(clientName)' has connected to iMCP"
+        content.body = "Client '\(clientName)' has connected to AIVA"
         content.threadIdentifier = "client-connection-\(clientName)"
 
         let request = UNNotificationRequest(
@@ -425,23 +438,22 @@ actor MCPConnectionManager {
     private let connectionID: UUID
     private let connection: NWConnection
     private let server: MCP.Server
-    private var transport: NetworkTransport
+    private var transport: NetworkTransport?
     private let parentManager: ServerNetworkManager
+    private var isStarted = false
+    private var isStopped = false
 
     init(connectionID: UUID, connection: NWConnection, parentManager: ServerNetworkManager) {
         self.connectionID = connectionID
         self.connection = connection
         self.parentManager = parentManager
 
-        self.transport = NetworkTransport(
-            connection: connection,
-            logger: nil,
-            bufferConfig: .unlimited
-        )
+        // Transport will be created lazily to avoid premature initialization
+        self.transport = nil
 
         // Create the MCP server
         self.server = MCP.Server(
-            name: Bundle.main.name ?? "iMCP",
+            name: Bundle.main.name ?? "AIVA",
             version: Bundle.main.shortVersionString ?? "unknown",
             capabilities: MCP.Server.Capabilities(
                 tools: .init(listChanged: true)
@@ -450,7 +462,26 @@ actor MCPConnectionManager {
     }
 
     func start(approvalHandler: @escaping (MCP.Client.Info) async -> Bool) async throws {
+        // Prevent double start
+        guard !isStarted && !isStopped else {
+            log.warning("Connection \(self.connectionID) already started or stopped, ignoring start request")
+            return
+        }
+        
         do {
+            // Create transport only when needed with reconnection disabled
+            self.transport = NetworkTransport(
+                connection: connection,
+                logger: nil,
+                reconnectionConfig: .disabled,  // Disable reconnection to avoid MCP SDK bug
+                bufferConfig: .unlimited
+            )
+            
+            guard let transport = self.transport else {
+                throw MCPError.connectionClosed
+            }
+            
+            isStarted = true
             log.notice("Starting MCP server for connection: \(self.connectionID)")
             try await server.start(transport: transport) { [weak self] clientInfo, capabilities in
                 guard let self = self else { throw MCPError.connectionClosed }
@@ -531,7 +562,22 @@ actor MCPConnectionManager {
     }
 
     func stop() async {
+        // Prevent double stop
+        guard !isStopped else {
+            log.debug("Connection \(self.connectionID) already stopped, ignoring stop request")
+            return
+        }
+        
+        isStopped = true
+        log.debug("Stopping connection \(self.connectionID)")
+        
+        // Stop server first
         await server.stop()
+        
+        // Clean up transport
+        self.transport = nil
+        
+        // Cancel network connection
         connection.cancel()
     }
 }
@@ -639,6 +685,7 @@ actor ServerNetworkManager {
     private var connections: [UUID: MCPConnectionManager] = [:]
     private var connectionTasks: [UUID: Task<Void, Never>] = [:]
     private var pendingConnections: [UUID: String] = [:]
+    private var clientConnections: [String: UUID] = [:]  // Track connections by client name
 
     typealias ConnectionApprovalHandler = @Sendable (UUID, MCP.Client.Info) async -> Bool
     private var connectionApprovalHandler: ConnectionApprovalHandler?
@@ -785,6 +832,7 @@ actor ServerNetworkManager {
         connections.removeAll()
         connectionTasks.removeAll()
         pendingConnections.removeAll()
+        clientConnections.removeAll()
 
         // Stop discovery
         await discoveryManager?.stop()
@@ -807,6 +855,18 @@ actor ServerNetworkManager {
         connections.removeValue(forKey: id)
         connectionTasks.removeValue(forKey: id)
         pendingConnections.removeValue(forKey: id)
+        
+        // Remove from client tracking
+        if let clientName = pendingConnections[id] {
+            clientConnections.removeValue(forKey: clientName)
+        }
+        // Also check by reverse lookup
+        for (clientName, connectionID) in clientConnections {
+            if connectionID == id {
+                clientConnections.removeValue(forKey: clientName)
+                break
+            }
+        }
     }
 
     // Handle new incoming connections
@@ -843,7 +903,20 @@ actor ServerNetworkManager {
 
                 // Start the MCP server with our approval handler
                 try await connectionManager.start { clientInfo in
-                    await approvalHandler(connectionID, clientInfo)
+                    // Check for existing connection from same client
+                    if let existingConnectionID = self.clientConnections[clientInfo.name] {
+                        log.warning("Client \(clientInfo.name) already has connection \(existingConnectionID), closing old one")
+                        await self.removeConnection(existingConnectionID)
+                    }
+                    
+                    let approved = await approvalHandler(connectionID, clientInfo)
+                    
+                    // Track client connection if approved
+                    if approved {
+                        self.clientConnections[clientInfo.name] = connectionID
+                    }
+                    
+                    return approved
                 }
 
                 log.notice("Connection \(connectionID) successfully established")
@@ -936,9 +1009,9 @@ actor ServerNetworkManager {
             log.notice("Tool call received from \(connectionID): \(params.name)")
 
             guard await self.isEnabledState else {
-                log.notice("Tool call rejected: iMCP is disabled")
+                log.notice("Tool call rejected: AIVA is disabled")
                 return CallTool.Result(
-                    content: [.text("iMCP is currently disabled. Please enable it to use tools.")],
+                    content: [.text("AIVA is currently disabled. Please enable it to use tools.")],
                     isError: true
                 )
             }
@@ -1012,7 +1085,7 @@ actor ServerNetworkManager {
         guard isEnabledState != enabled else { return }
 
         isEnabledState = enabled
-        log.info("iMCP enabled state changed to: \(enabled)")
+        log.info("AIVA enabled state changed to: \(enabled)")
 
         // Notify all connected clients that the tool list has changed
         for (_, connectionManager) in connections {
@@ -1034,3 +1107,4 @@ actor ServerNetworkManager {
         }
     }
 }
+

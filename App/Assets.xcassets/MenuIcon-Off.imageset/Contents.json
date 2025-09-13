@@ -1,25 +1,25 @@
 {
-  "images": [
+  "images" : [
     {
-      "filename": "MenuIcon - Light.svg",
-      "idiom": "universal"
+      "filename" : "AIVA-MENU-ICON-OFF.png",
+      "idiom" : "universal"
     },
     {
-      "appearances": [
+      "appearances" : [
         {
-          "appearance": "luminosity",
-          "value": "dark"
+          "appearance" : "luminosity",
+          "value" : "dark"
         }
       ],
-      "filename": "MenuIcon - Dark.svg",
-      "idiom": "universal"
+      "filename" : "AIVA-MENU-ICON-OFF 1.png",
+      "idiom" : "universal"
     }
   ],
-  "info": {
-    "author": "xcode",
-    "version": 1
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
   },
-  "properties": {
-    "preserves-vector-representation": true
+  "properties" : {
+    "preserves-vector-representation" : true
   }
 }
