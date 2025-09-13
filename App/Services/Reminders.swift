@@ -394,6 +394,54 @@ final class RemindersService: Service {
             try self.eventStore.remove(reminder, commit: true)
             return Value.string("deleted")
         }
+
+        Tool(
+            name: "reminders_complete",
+            description: "Mark a reminder as completed by identifier",
+            inputSchema: .object(
+                properties: [
+                    "identifier": .string(
+                        description: "Reminder identifier"
+                    ),
+                ],
+                required: ["identifier"],
+                additionalProperties: false
+            ),
+            annotations: .init(
+                title: "Complete Reminder",
+                destructiveHint: false,
+                openWorldHint: false
+            )
+        ) { arguments in
+            try await self.activate()
+
+            guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
+                throw NSError(
+                    domain: "RemindersError", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Reminders access not authorized"]
+                )
+            }
+
+            guard let identifier = arguments["identifier"]?.stringValue else {
+                throw NSError(
+                    domain: "RemindersError", code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Identifier is required"]
+                )
+            }
+
+            guard let reminder = try await self.findReminder(by: identifier) else {
+                throw NSError(
+                    domain: "RemindersError", code: 4,
+                    userInfo: [NSLocalizedDescriptionKey: "Reminder not found"]
+                )
+            }
+
+            reminder.isCompleted = true
+            reminder.completionDate = Date()
+
+            try self.eventStore.save(reminder, commit: true)
+            return PlanAction(reminder)
+        }
     }
 
     private func findReminder(by identifier: String) async throws -> EKReminder? {
