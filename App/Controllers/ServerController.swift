@@ -289,6 +289,12 @@ final class ServerController: ObservableObject {
             await self.networkManager.start()
             self.updateServerStatus("Running")
 
+            // Listen for tool toggle changes and notify connected clients
+            NotificationCenter.default.addObserver(forName: .aivaToolTogglesChanged, object: nil, queue: .main) { [weak self] _ in
+                guard let self = self else { return }
+                Task { await self.networkManager.notifyToolsChanged() }
+            }
+
             await networkManager.setConnectionApprovalHandler {
                 [weak self] connectionID, clientInfo in
                 guard let self = self else {
@@ -319,6 +325,11 @@ final class ServerController: ObservableObject {
         // This function is still called by ContentView's onChange when user toggles services.
         // It ensures ServerNetworkManager is updated and clients are notified.
         await networkManager.updateServiceBindings(bindings)
+    }
+
+    // Notify connected clients that the tool list may have changed (e.g., per-tool toggle)
+    func notifyToolsChanged() async {
+        await networkManager.notifyToolsChanged()
     }
 
     func startServer() async {
@@ -979,15 +990,24 @@ actor ServerNetworkManager {
                         isServiceEnabled
                     {
                         for tool in service.tools {
-                            log.debug("Adding tool: \(tool.name)")
-                            tools.append(
-                                .init(
-                                    name: tool.name,
-                                    description: tool.description,
-                                    inputSchema: tool.inputSchema,
-                                    annotations: tool.annotations
+                            let key = "toolEnabled.\(serviceId).\(tool.name)"
+                            let enabled: Bool = {
+                                if UserDefaults.standard.object(forKey: key) == nil { return true }
+                                return UserDefaults.standard.bool(forKey: key)
+                            }()
+                            if enabled {
+                                log.debug("Adding tool: \(tool.name)")
+                                tools.append(
+                                    .init(
+                                        name: tool.name,
+                                        description: tool.description,
+                                        inputSchema: tool.inputSchema,
+                                        annotations: tool.annotations
+                                    )
                                 )
-                            )
+                            } else {
+                                log.debug("Skipping disabled tool: \(tool.name)")
+                            }
                         }
                     }
                 }
@@ -1106,5 +1126,11 @@ actor ServerNetworkManager {
             }
         }
     }
-}
 
+    // Notify all connected clients that tool list changed (e.g., per-tool toggles)
+    func notifyToolsChanged() async {
+        for (_, connectionManager) in connections {
+            await connectionManager.notifyToolListChanged()
+        }
+    }
+}

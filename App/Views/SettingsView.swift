@@ -25,6 +25,7 @@ struct SettingsView: View {
     enum SettingsSection: String, CaseIterable, Identifiable {
         case general = "General"
         case memory = "Memory"
+        case tools = "Tools"
 
         var id: String { self.rawValue }
 
@@ -32,6 +33,7 @@ struct SettingsView: View {
             switch self {
             case .general: return "gear"
             case .memory: return "brain"
+            case .tools: return "hammer"
             }
         }
     }
@@ -64,6 +66,9 @@ struct SettingsView: View {
                     MemorySettingsView()
                         .navigationTitle("Memory")
                         .formStyle(.grouped)
+                case .tools:
+                    ToolsCatalogView(serviceConfigs: serverController.computedServiceConfigs)
+                        .navigationTitle("Tools")
                 }
             } else {
                 Text("Select a category")
@@ -208,6 +213,15 @@ struct MemorySettingsView: View {
         }
     }
     
+    private var connectButtonTint: Color {
+        switch connectionStatus {
+        case .connected: return .green
+        case .disconnected: return .red
+        case .testing: return .orange
+        case .unknown: return .accentColor
+        }
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -217,35 +231,37 @@ struct MemorySettingsView: View {
                         Image(systemName: "brain")
                             .foregroundStyle(.blue)
                             .font(.title2)
-                        Text("Neo4j Connection")
+                        Text("Memory")
                             .font(.title2)
                             .fontWeight(.semibold)
-                        
-                        // Connection Status Indicator
-                        HStack(spacing: 4) {
-                            Image(systemName: connectionStatus.icon)
-                                .foregroundStyle(connectionStatus.color)
-                                .symbolRenderingMode(.multicolor)
-                                .font(.caption)
-                                .symbolEffect(.rotate, isActive: connectionStatus == .testing)
-                            Text(connectionStatus.text)
-                                .font(.caption)
-                                .foregroundStyle(connectionStatus.color)
-                                .fontWeight(.medium)
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(connectionStatus.color.opacity(0.1))
-                        .cornerRadius(6)
                         
                         Spacer()
                         
                         // Action Buttons moved to header
                         HStack(spacing: 12) {
-                            Button("Test Connection") {
+                            Button {
                                 testConnection()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    switch connectionStatus {
+                                    case .testing:
+                                        ProgressView()
+                                            .controlSize(.small)
+                                        Text("Connecting...")
+                                    case .connected:
+                                        Image(systemName: "checkmark.circle.fill")
+                                        Text("Connected")
+                                    case .disconnected:
+                                        Image(systemName: "xmark.octagon.fill")
+                                        Text("Retry")
+                                    case .unknown:
+                                        Image(systemName: "bolt.horizontal.circle")
+                                        Text("Connect")
+                                    }
+                                }
                             }
                             .buttonStyle(.borderedProminent)
+                            .tint(connectButtonTint)
                             .controlSize(.regular)
                             .disabled(connectionStatus == .testing)
                             

@@ -4,7 +4,7 @@ import SwiftUI
 class AboutWindowController: NSWindowController {
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 340, height: 240),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -18,43 +18,44 @@ class AboutWindowController: NSWindowController {
 }
 
 private struct AboutView: View {
-    var body: some View {
-        VStack {
-            HStack(alignment: .top, spacing: 32) {
-                // Left column - AIVA Logo
-                Image("Logo")
-                    .resizable()
-                    .frame(width: 160, height: 160)
-                    .padding()
-
-                // Right column - App info and links
-                VStack(alignment: .leading, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("AIVA")
-                            .font(.system(size: 24, weight: .medium))
-
-                        if let shortVersionString = Bundle.main.shortVersionString {
-                            Text("Version \(shortVersionString)")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.top, 20)
-
-                    Button("Report an Issue...") {
-                        NSWorkspace.shared.open(
-                            URL(string: "https://github.com/banddude/AIVA/issues/new")!)
-                    }
-                }
-            }
-
-            if let copyright = Bundle.main.copyright {
-                Text(copyright)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding()
-            }
+    private var versionString: String {
+        let short = Bundle.main.shortVersionString ?? ""
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? ""
+        switch (short.isEmpty, build.isEmpty) {
+        case (false, false): return "Version \(short) (\(build))"
+        case (false, true): return "Version \(short)"
+        case (true, false): return "Build \(build)"
+        default: return ""
         }
-        .frame(width: 400)
-        .padding()
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            // App icon
+            Image("Logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 120, height: 120)
+
+            // App name and version
+            if !versionString.isEmpty {
+                Text(versionString)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            // Keep only "Report an Issue..." link; Website/Docs removed
+            Button("Report an Issue...") {
+                NSWorkspace.shared.open(
+                    URL(string: "https://github.com/banddude/AIVA/issues/new")!
+                )
+            }
+            .buttonStyle(.link)
+            .font(.callout)
+
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

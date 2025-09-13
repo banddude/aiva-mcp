@@ -518,7 +518,7 @@ struct ContentView: View {
     // MARK: - Launch Actions
     
     private func launchClaudeDesktop() {
-        NSWorkspace.shared.launchApplication("Claude")
+        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/Applications/Claude.app"), configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
     }
     
     private func launchClaudeCodeCLI() {

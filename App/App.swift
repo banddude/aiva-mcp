@@ -15,8 +15,11 @@ struct App: SwiftUI.App {
                 isMenuPresented: $isMenuPresented
             )
         } label: {
-            Text(isEnabled ? "AIVA" : "aiva")
-                .font(.system(size: 12, weight: .medium))
+            Image("aiva-logo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: 10, maxHeight: 10)
+                .opacity(isEnabled ? 1.0 : 0.5)
                 .id(isEnabled)
         }
         .menuBarExtraStyle(.window)

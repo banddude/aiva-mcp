@@ -9,54 +9,43 @@ struct ConnectionApprovalView: View {
     @State private var alwaysTrust = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Icon
-            Image(systemName: "brain")
-                .font(.system(size: 48))
-                .foregroundColor(.accentColor)
-                .frame(width: 64, height: 64)
-
-            // Title
-            Text("Client Connection Request")
-                .font(.title2)
-                .fontWeight(.semibold)
-
-            // Message
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
             VStack(alignment: .leading, spacing: 8) {
                 Text("Allow \"\(clientName)\" to connect to AIVA?")
+                    .font(.title3)
+                    .fontWeight(.semibold)
 
-                Text("This will give the client access to enabled services.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.leading)
+                HStack(alignment: .center, spacing: 12) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 48, height: 48)
+                        .cornerRadius(8)
+
+                    Text("This client can use your currently enabled services and any you enable in the future.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            // Always trust checkbox
-            HStack(alignment: .firstTextBaseline) {
+            // Always trust + actions row
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Toggle("Always trust this client", isOn: $alwaysTrust)
                     .toggleStyle(CheckboxToggleStyle())
                 Spacer()
+                Button("Deny") { onDeny() }
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
+                Button("Allow") { onApprove(alwaysTrust) }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
             }
-            .padding(.bottom, 20)
-
-            // Buttons
-            HStack(spacing: 12) {
-                Button("Deny") {
-                    onDeny()
-                }
-                .buttonStyle(.bordered)
-                .keyboardShortcut(.cancelAction)
-
-                Button("Allow") {
-                    onApprove(alwaysTrust)
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-            }
+            .padding(.top, 8)
         }
-        .padding(24)
-        .frame(width: 400, height: 300)
-        .fixedSize()
+        .padding(20)
+        .frame(width: 360, height: 175)
         .background(Color(NSColor.windowBackgroundColor))
         .cornerRadius(12)
         .shadow(radius: 10)
@@ -109,7 +98,7 @@ class ConnectionApprovalWindowController: NSObject {
 
         // Create the window with fixed size matching the SwiftUI view
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 175),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -157,12 +146,8 @@ class ConnectionApprovalWindowController: NSObject {
 #Preview {
     ConnectionApprovalView(
         clientName: "Claude Desktop",
-        onApprove: { alwaysTrust in
-            print("Approved with always trust: \(alwaysTrust)")
-        },
-        onDeny: {
-            print("Denied")
-        }
+        onApprove: { alwaysTrust in print("Approved: \\(alwaysTrust)") },
+        onDeny: { print("Denied") }
     )
-    .frame(width: 500, height: 400)
+    .frame(width: 360, height: 175)
 }

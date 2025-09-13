@@ -27,3 +27,7 @@ extension ISO8601DateFormatter {
         return nil
     }
 }
+
+extension Notification.Name {
+    static let aivaToolTogglesChanged = Notification.Name("aiva.toolTogglesChanged")
+}
