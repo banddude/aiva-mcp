@@ -16,12 +16,17 @@ struct ServiceToggleView: View {
     var body: some View {
         HStack {
             Button(action: {
+                print("🔄 Toggling service: \(config.name)")
                 config.binding.wrappedValue.toggle()
+                print("📝 \(config.name) enabled: \(config.binding.wrappedValue), activated: \(isServiceActivated)")
                 if config.binding.wrappedValue && !isServiceActivated {
+                    print("🚀 Attempting to activate \(config.name) service")
                     Task {
                         do {
                             try await config.service.activate()
+                            print("✅ \(config.name) service activated successfully")
                         } catch {
+                            print("❌ \(config.name) service activation failed: \(error)")
                             config.binding.wrappedValue = false
                         }
                     }

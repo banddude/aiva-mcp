@@ -4,7 +4,7 @@ import AppKit
 class SettingsWindowController: NSWindowController {
     convenience init(serverController: ServerController) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 840, height: 360),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
@@ -13,17 +13,17 @@ class SettingsWindowController: NSWindowController {
         window.title = "Settings"
         window.contentView = NSHostingView(rootView: SettingsView(serverController: serverController))
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 600, height: 300)
+        window.minSize = NSSize(width: 720, height: 300)
         self.init(window: window)
     }
 }
 
 struct SettingsView: View {
     @ObservedObject var serverController: ServerController
-    @State private var selectedSection: SettingsSection? = .general
+    @State private var selectedSection: SettingsSection? = .clients
 
     enum SettingsSection: String, CaseIterable, Identifiable {
-        case general = "General"
+        case clients = "Clients"
         case memory = "Memory"
         case tools = "Tools"
 
@@ -31,7 +31,7 @@ struct SettingsView: View {
 
         var icon: String {
             switch self {
-            case .general: return "gear"
+            case .clients: return "person.2"
             case .memory: return "brain"
             case .tools: return "hammer"
             }
@@ -58,10 +58,9 @@ struct SettingsView: View {
 
             if let selectedSection {
                 switch selectedSection {
-                case .general:
+                case .clients:
                     GeneralSettingsView(serverController: serverController)
-                        .navigationTitle("General")
-                        .formStyle(.grouped)
+                        .navigationTitle("Clients")
                 case .memory:
                     MemorySettingsView()
                         .navigationTitle("Memory")
@@ -103,60 +102,87 @@ struct GeneralSettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Trusted Clients")
-                            .font(.headline)
-                        Spacer()
-                        if !trustedClients.isEmpty {
-                            Button("Remove All") {
-                                showingResetAlert = true
-                            }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(.red)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack(spacing: 12) {
+                    Image(systemName: "person.2")
+                        .foregroundStyle(.blue)
+                        .font(.title2)
+                    Text("Clients")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    if !trustedClients.isEmpty {
+                        Button("Remove All", role: .destructive) {
+                            showingResetAlert = true
                         }
+                        .buttonStyle(.bordered)
                     }
-
-                    Text("Clients that automatically connect without approval.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-                .padding(.bottom, 4)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
 
-                if trustedClients.isEmpty {
-                    HStack {
-                        Text("No trusted clients")
-                            .foregroundStyle(.secondary)
-                            .italic()
-                        Spacer()
-                    }
-                    .padding(.vertical, 8)
-                } else {
-                    List(trustedClients, id: \.self, selection: $selectedClients) { client in
+                Text("Trusted clients connect automatically without approval.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 24)
+
+                // Card with list of clients or empty state
+                VStack(alignment: .leading, spacing: 12) {
+                    if trustedClients.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("No trusted clients yet")
+                                .font(.headline)
+                            Text("Approve a client once, then add it here to trust it for future connections.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                    } else {
+                        List(trustedClients, id: \.self, selection: $selectedClients) { client in
+                            HStack {
+                                Image(systemName: "lock.open")
+                                    .foregroundStyle(.green)
+                                Text(client)
+                                    .font(.system(.body, design: .monospaced))
+                                Spacer()
+                            }
+                            .contextMenu {
+                                Button("Remove", role: .destructive) {
+                                    serverController.removeTrustedClient(client)
+                                }
+                            }
+                        }
+                        .frame(minHeight: 140, maxHeight: 260)
+                        .onDeleteCommand {
+                            for clientID in selectedClients {
+                                serverController.removeTrustedClient(clientID)
+                            }
+                            selectedClients.removeAll()
+                        }
+
                         HStack {
-                            Text(client)
-                                .font(.system(.body, design: .monospaced))
+                            Button("Remove Selected", role: .destructive) {
+                                for clientID in selectedClients {
+                                    serverController.removeTrustedClient(clientID)
+                                }
+                                selectedClients.removeAll()
+                            }
+                            .disabled(selectedClients.isEmpty)
                             Spacer()
                         }
-                        .contextMenu {
-                            Button("Remove Client", role: .destructive) {
-                                serverController.removeTrustedClient(client)
-                            }
-                        }
-                    }
-                    .frame(minHeight: 100, maxHeight: 200)
-                    .onDeleteCommand {
-                        for clientID in selectedClients {
-                            serverController.removeTrustedClient(clientID)
-                        }
-                        selectedClients.removeAll()
                     }
                 }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(NSColor.separatorColor), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
         }
-        .formStyle(.grouped)
         .alert("Remove All Trusted Clients", isPresented: $showingResetAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Remove All", role: .destructive) {
@@ -178,6 +204,8 @@ struct MemorySettingsView: View {
     @AppStorage("memoryNeo4jDatabase") private var neo4jDatabase = "neo4j"
     @State private var showPassword = false
     @State private var connectionStatus: ConnectionStatus = .unknown
+    private let labelHeight: CGFloat = 20
+    private let leftColumnWidth: CGFloat = 260
     
     enum ConnectionStatus {
         case unknown
@@ -224,147 +252,127 @@ struct MemorySettingsView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                // Header Section
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "brain")
-                            .foregroundStyle(.blue)
-                            .font(.title2)
-                        Text("Memory")
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                        
-                        Spacer()
-                        
-                        // Action Buttons moved to header
-                        HStack(spacing: 12) {
-                            Button {
-                                testConnection()
-                            } label: {
-                                HStack(spacing: 6) {
-                                    switch connectionStatus {
-                                    case .testing:
-                                        ProgressView()
-                                            .controlSize(.small)
-                                        Text("Connecting...")
-                                    case .connected:
-                                        Image(systemName: "checkmark.circle.fill")
-                                        Text("Connected")
-                                    case .disconnected:
-                                        Image(systemName: "xmark.octagon.fill")
-                                        Text("Retry")
-                                    case .unknown:
-                                        Image(systemName: "bolt.horizontal.circle")
-                                        Text("Connect")
-                                    }
-                                }
+            VStack(spacing: 16) {
+                // Header
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "brain")
+                        .foregroundStyle(.blue)
+                        .font(.title2)
+                    Text("Memory")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Button {
+                        testConnection()
+                    } label: {
+                        HStack(spacing: 6) {
+                            switch connectionStatus {
+                            case .testing:
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Connecting...")
+                            case .connected:
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Connected")
+                            case .disconnected:
+                                Image(systemName: "arrow.clockwise.circle")
+                                Text("Retry")
+                            case .unknown:
+                                Image(systemName: "bolt.horizontal.circle")
+                                Text("Connect")
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(connectButtonTint)
-                            .controlSize(.regular)
-                            .disabled(connectionStatus == .testing)
-                            
-                            Button("Reset to Defaults") {
-                                neo4jUrl = "neo4j+s://54f7352a.databases.neo4j.io"
-                                neo4jUsername = "neo4j"
-                                neo4jPassword = "LlTnVK-QQie_GwI2xYjfSdYktv9_a0cVDF8sJB_zvgs"
-                                neo4jDatabase = "neo4j"
-                            }
-                            .buttonStyle(.bordered)
-                            .controlSize(.regular)
                         }
                     }
-                    Text("Configure your Neo4j database connection for memory storage.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, 32)
+                    .buttonStyle(.borderedProminent)
+                    .tint(connectButtonTint)
+                    .disabled(connectionStatus == .testing)
+
+                    Button("Reset Defaults") {
+                        neo4jUrl = "neo4j+s://54f7352a.databases.neo4j.io"
+                        neo4jUsername = "neo4j"
+                        neo4jPassword = "LlTnVK-QQie_GwI2xYjfSdYktv9_a0cVDF8sJB_zvgs"
+                        neo4jDatabase = "neo4j"
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
-                
-                // Connection Form
-                VStack(spacing: 20) {
-                    // Database URL
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "link")
-                                .foregroundStyle(.blue)
-                                .frame(width: 16)
-                            Text("Database URL")
-                                .font(.headline)
-                                .fontWeight(.medium)
+
+                // Card: Connection Settings
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Configure your Neo4j connection for memory storage.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    // Proper grid alignment: two rows, two columns
+                    Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 16) {
+                        GridRow {
+                            // Row 1: DB Name (left) | URL (right)
+                            VStack(alignment: .leading, spacing: 6) {
+                                labelRow(icon: "cylinder", color: .orange, title: "Database Name")
+                                TextField("Database name", text: $neo4jDatabase)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            .frame(width: leftColumnWidth, alignment: .leading)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                labelRow(icon: "link", color: .blue, title: "Database URL")
+                                TextField("neo4j+s://your-instance.databases.neo4j.io", text: $neo4jUrl)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        TextField("neo4j+s://your-instance.databases.neo4j.io", text: $neo4jUrl)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    
-                    // Credentials Section
-                    VStack(alignment: .leading, spacing: 16) {
-                        HStack {
-                            Image(systemName: "person.crop.circle")
-                                .foregroundStyle(.green)
-                                .frame(width: 16)
-                            Text("Credentials")
-                                .font(.headline)
-                                .fontWeight(.medium)
-                        }
-                        
-                        VStack(spacing: 12) {
-                            // Username
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Username")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+
+                        GridRow {
+                            // Row 2: Username (left) | Password (right)
+                            VStack(alignment: .leading, spacing: 6) {
+                                ZStack(alignment: .topTrailing) {
+                                    labelRow(icon: "person", color: .green, title: "Username")
+                                }
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                                .frame(height: labelHeight)
+
                                 TextField("Username", text: $neo4jUsername)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(.body, design: .monospaced))
                             }
-                            
-                            // Password
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text("Password")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                    Button(action: { showPassword.toggle() }) {
-                                        Image(systemName: showPassword ? "eye.slash" : "eye")
-                                            .foregroundStyle(.secondary)
+                            .frame(width: leftColumnWidth, alignment: .leading)
+
+                            ZStack(alignment: .topTrailing) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    // Label (uniform height)
+                                    labelRow(icon: "key", color: .purple, title: "Password")
+                                        .frame(height: labelHeight, alignment: .leading)
+
+                                    // Field
+                                    if showPassword {
+                                        TextField("Password", text: $neo4jPassword)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(.body, design: .monospaced))
+                                    } else {
+                                        SecureField("Password", text: $neo4jPassword)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(.body, design: .monospaced))
                                     }
-                                    .buttonStyle(.plain)
                                 }
-                                
-                                if showPassword {
-                                    TextField("Password", text: $neo4jPassword)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .monospaced))
-                                } else {
-                                    SecureField("Password", text: $neo4jPassword)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .monospaced))
+
+                                // Eye aligned to the far right edge of the field (container's trailing)
+                                Button(action: { showPassword.toggle() }) {
+                                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                                        .foregroundStyle(.secondary)
                                 }
+                                .buttonStyle(.plain)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                    }
-                    
-                    // Database Name
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "cylinder")
-                                .foregroundStyle(.orange)
-                                .frame(width: 16)
-                            Text("Database Name")
-                                .font(.headline)
-                                .fontWeight(.medium)
-                        }
-                        TextField("Database name", text: $neo4jDatabase)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(.body, design: .monospaced))
                     }
                 }
+                .padding(16)
+                .background(Color(NSColor.controlBackgroundColor))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(NSColor.separatorColor), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
             }
@@ -402,5 +410,16 @@ struct MemorySettingsView: View {
     private func checkConnectionStatus() {
         // Set to unknown when settings change, requiring a test
         connectionStatus = .unknown
+    }
+
+    private func labelRow(icon: String, color: Color, title: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .frame(width: 14)
+            Text(title)
+                .font(.subheadline)
+                .fontWeight(.medium)
+        }
     }
 }

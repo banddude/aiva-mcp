@@ -355,7 +355,7 @@ struct ContentView: View {
             do {
                 let url = FileManager.default.homeDirectoryForCurrentUser
                     .appendingPathComponent(".codex/config.toml")
-                var text = (try? String(contentsOf: url)) ?? ""
+                var text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
                 if newValue {
                     if !text.contains("[mcp_servers.aiva]") {
                         text.append("\n[mcp_servers.aiva]\ncommand = \"\(serverPath)\"\nargs = []\n")

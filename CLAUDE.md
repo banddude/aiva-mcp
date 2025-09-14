@@ -65,6 +65,13 @@ tell application "Mail" to make new outgoing message
 7. `mail_draft` - Create new email draft
 8. `mail_send` - Send composed email
 
+## Testing Rules
+**IMPORTANT**: When testing mail functionality, ONLY use these accounts:
+- **Gmail account**: MikeJShaffer@gmail.com (Google)
+- **iCloud account**: mikejshaffer@icloud.com (iCloud)
+
+**DO NOT test with the SHAFFER work account** (mike@shaffercon.com) to avoid sending test emails to work contacts.
+
 ## Implementation Priority
 1. Basic Mail service setup with AppleScript execution
 2. Keyboard shortcut integration for reply/forward actions
