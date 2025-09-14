@@ -54,6 +54,7 @@ enum ServiceRegistry {
         ContactsService.shared,
         LocationService.shared,
         MapsService.shared,
+        MailService.shared,
         MemoryService.shared,
         MessageService.shared,
         RemindersService.shared,
@@ -105,8 +106,6 @@ enum ServiceRegistry {
                 service: LocationService.shared,
                 binding: locationEnabled
             ),
-            // Mail service temporarily disabled
-            /*
             ServiceConfig(
                 name: "Mail",
                 iconName: "envelope.fill",
@@ -114,7 +113,6 @@ enum ServiceRegistry {
                 service: MailService.shared,
                 binding: mailEnabled
             ),
-            */
             ServiceConfig(
                 name: "Maps",
                 iconName: "mappin.and.ellipse",
