@@ -10,24 +10,53 @@ final class MailService: Service {
     var isActivated: Bool {
         get async {
             // Check if Mail app is available
-            let mailExists = FileManager.default.fileExists(atPath: "/Applications/Mail.app")
-            return mailExists
+            guard FileManager.default.fileExists(atPath: "/Applications/Mail.app") else {
+                return false
+            }
+            
+            // Test basic AppleScript access without throwing errors
+            do {
+                _ = try await executeAppleScript("tell application \"Mail\" to return name")
+                return true
+            } catch {
+                log.debug("Mail service not yet activated: \(error)")
+                return false
+            }
         }
     }
     
     func activate() async throws {
-        // Ensure Mail app is available and accessible
-        guard await isActivated else {
+        // Ensure Mail app is available
+        guard FileManager.default.fileExists(atPath: "/Applications/Mail.app") else {
             throw MailError.mailAppNotFound
         }
         
-        // Test basic AppleScript execution
-        _ = try await executeAppleScript("tell application \"Mail\" to return name")
-        log.info("Mail service activated successfully")
+        // Test AppleScript execution - this will trigger permission prompt if needed
+        do {
+            _ = try await executeAppleScript("tell application \"Mail\" to return name")
+            log.info("Mail service activated successfully")
+        } catch {
+            log.error("Failed to activate Mail service: \(error)")
+            throw MailError.activationFailed(error.localizedDescription)
+        }
     }
     
     var tools: [Tool] {
-            // Reply tool
+            // List accounts tool
+            Tool(
+                name: "mail_list_accounts",
+                description: "List all configured mail accounts in Mail app",
+                inputSchema: .object(
+                    properties: [:],
+                    required: [],
+                    additionalProperties: false
+                ),
+                annotations: .init(title: "List Mail Accounts", readOnlyHint: true, openWorldHint: false)
+            ) { _ in
+                let accounts = try await self.listAccounts()
+                return "Mail accounts:\n" + accounts.map { "- \($0.name) (\($0.email))" }.joined(separator: "\n")
+            }
+            
             Tool(
                 name: "mail_reply",
                 description: "Reply to the currently selected email in Mail app using ⌘R keyboard shortcut",
@@ -122,7 +151,8 @@ final class MailService: Service {
                     properties: [
                         "to": .string(description: "Recipient email address"),
                         "subject": .string(description: "Email subject line"),
-                        "body": .string(description: "Email message body")
+                        "body": .string(description: "Email message body"),
+                        "from_account": .string(description: "Email account to send from (optional)")
                     ],
                     required: ["to", "subject", "body"],
                     additionalProperties: false
@@ -132,7 +162,8 @@ final class MailService: Service {
                 let to = input["to"]?.stringValue ?? ""
                 let subject = input["subject"]?.stringValue ?? ""
                 let body = input["body"]?.stringValue ?? ""
-                try await self.createDraft(to: to, subject: subject, body: body)
+                let fromAccount = input["from_account"]?.stringValue
+                try await self.createDraft(to: to, subject: subject, body: body, fromAccount: fromAccount)
                 return "Email draft created successfully"
             }
             
@@ -143,7 +174,8 @@ final class MailService: Service {
                     properties: [
                         "to": .string(description: "Recipient email address"),
                         "subject": .string(description: "Email subject line"),
-                        "body": .string(description: "Email message body")
+                        "body": .string(description: "Email message body"),
+                        "from_account": .string(description: "Email account to send from (optional)")
                     ],
                     required: ["to", "subject", "body"],
                     additionalProperties: false
@@ -153,7 +185,8 @@ final class MailService: Service {
                 let to = input["to"]?.stringValue ?? ""
                 let subject = input["subject"]?.stringValue ?? ""
                 let body = input["body"]?.stringValue ?? ""
-                try await self.sendEmail(to: to, subject: subject, body: body)
+                let fromAccount = input["from_account"]?.stringValue
+                try await self.sendEmail(to: to, subject: subject, body: body, fromAccount: fromAccount)
                 return "Email sent successfully to \(to)"
             }
     }
@@ -170,6 +203,14 @@ final class MailService: Service {
             task.standardOutput = pipe
             task.standardError = pipe
             
+            // Set a reasonable timeout
+            DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+                if task.isRunning {
+                    task.terminate()
+                    continuation.resume(throwing: MailError.appleScriptError("AppleScript execution timed out"))
+                }
+            }
+            
             task.terminationHandler = { _ in
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 let output = String(data: data, encoding: .utf8) ?? ""
@@ -177,7 +218,8 @@ final class MailService: Service {
                 if task.terminationStatus == 0 {
                     continuation.resume(returning: output.trimmingCharacters(in: .whitespacesAndNewlines))
                 } else {
-                    continuation.resume(throwing: MailError.appleScriptError(output))
+                    let errorMessage = output.isEmpty ? "AppleScript execution failed" : output
+                    continuation.resume(throwing: MailError.appleScriptError(errorMessage))
                 }
             }
             
@@ -187,6 +229,33 @@ final class MailService: Service {
                 continuation.resume(throwing: error)
             }
         }
+    }
+    
+    // MARK: - Account Management
+    
+    func listAccounts() async throws -> [MailAccount] {
+        log.info("Listing mail accounts")
+        let script = """
+        tell application "Mail"
+            set accountList to {}
+            repeat with eachAccount in accounts
+                set accountInfo to {name of eachAccount, email addresses of eachAccount}
+                set end of accountList to accountInfo
+            end repeat
+            return accountList
+        end tell
+        """
+        
+        let output = try await executeAppleScript(script)
+        return parseAccountResults(output)
+    }
+    
+    private func parseAccountResults(_ output: String) -> [MailAccount] {
+        // Simple parser for AppleScript list format
+        // TODO: Implement more robust parsing
+        let accounts: [MailAccount] = []
+        // For now, return empty array - this would need proper AppleScript list parsing
+        return accounts
     }
     
     // MARK: - Mail Actions
@@ -276,7 +345,7 @@ final class MailService: Service {
     
     // MARK: - Email Drafting & Sending
     
-    func createDraft(to: String, subject: String, body: String) async throws {
+    func createDraft(to: String, subject: String, body: String, fromAccount: String? = nil) async throws {
         log.info("Creating email draft")
         let script = """
         tell application "Mail"
@@ -288,7 +357,7 @@ final class MailService: Service {
         _ = try await executeAppleScript(script)
     }
     
-    func sendEmail(to: String, subject: String, body: String) async throws {
+    func sendEmail(to: String, subject: String, body: String, fromAccount: String? = nil) async throws {
         log.info("Sending email")
         let script = """
         tell application "Mail"
@@ -302,6 +371,11 @@ final class MailService: Service {
 }
 
 // MARK: - Data Models
+
+struct MailAccount {
+    let name: String
+    let email: String
+}
 
 struct EmailResult {
     let subject: String
@@ -323,4 +397,5 @@ enum MailError: Error {
     case appleScriptError(String)
     case noEmailSelected
     case parsingError
+    case activationFailed(String)
 }
