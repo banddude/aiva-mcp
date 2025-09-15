@@ -27,6 +27,7 @@ struct SettingsView: View {
         case servers = "Servers"
         case memory = "Memory"
         case tools = "Tools"
+        case logs = "Logs"
 
         var id: String { self.rawValue }
 
@@ -36,6 +37,7 @@ struct SettingsView: View {
             case .servers: return "server.rack"
             case .memory: return "brain"
             case .tools: return "hammer"
+            case .logs: return "text.and.command.macwindow"
             }
         }
     }
@@ -73,6 +75,9 @@ struct SettingsView: View {
                 case .tools:
                     ToolsCatalogView(serviceConfigs: serverController.computedServiceConfigs)
                         .navigationTitle("Tools")
+                case .logs:
+                    LogsSettingsView()
+                        .navigationTitle("Logs")
                 }
             } else {
                 Text("Select a category")
@@ -81,7 +86,10 @@ struct SettingsView: View {
             }
         }
         .toolbar {
-            Text("")
+            ToolbarItem(placement: .primaryAction) {
+                Spacer()
+                    .frame(minWidth: 0, minHeight: 0)
+            }
         }
         .task {
             let window = NSApplication.shared.keyWindow
@@ -203,9 +211,9 @@ struct GeneralSettingsView: View {
 }
 
 struct MemorySettingsView: View {
-    @AppStorage("memoryNeo4jUrl") private var neo4jUrl = "neo4j+s://54f7352a.databases.neo4j.io"
-    @AppStorage("memoryNeo4jUsername") private var neo4jUsername = "neo4j"
-    @AppStorage("memoryNeo4jPassword") private var neo4jPassword = "LlTnVK-QQie_GwI2xYjfSdYktv9_a0cVDF8sJB_zvgs"
+    @AppStorage("memoryNeo4jUrl") private var neo4jUrl = ""
+    @AppStorage("memoryNeo4jUsername") private var neo4jUsername = ""
+    @AppStorage("memoryNeo4jPassword") private var neo4jPassword = ""
     @AppStorage("memoryNeo4jDatabase") private var neo4jDatabase = "neo4j"
     @State private var showPassword = false
     @State private var connectionStatus: ConnectionStatus = .unknown
@@ -292,10 +300,10 @@ struct MemorySettingsView: View {
                     .tint(connectButtonTint)
                     .disabled(connectionStatus == .testing)
 
-                    Button("Reset Defaults") {
-                        neo4jUrl = "neo4j+s://54f7352a.databases.neo4j.io"
-                        neo4jUsername = "neo4j"
-                        neo4jPassword = "LlTnVK-QQie_GwI2xYjfSdYktv9_a0cVDF8sJB_zvgs"
+                    Button("Clear") {
+                        neo4jUrl = ""
+                        neo4jUsername = ""
+                        neo4jPassword = ""
                         neo4jDatabase = "neo4j"
                     }
                     .buttonStyle(.bordered)
@@ -721,8 +729,8 @@ struct ServersSettingsView: View {
                         
                         // Show status for subprocess servers
                         HStack(spacing: 4) {
-                            if let config = controller.computedServiceConfigs.first(where: { 
-                                $0.id == "SubprocessService_\(server.id.uuidString)" 
+                            if let config = controller.computedServiceConfigs.first(where: {
+                                $0.id == "SubprocessService_\(server.id.uuidString)"
                             }) {
                                 let toolCount = config.service.tools.count
                                 if toolCount > 0 {
@@ -732,6 +740,14 @@ struct ServersSettingsView: View {
                                     Text("\(toolCount) tools available")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                } else if let err = (config.service as? SubprocessService)?.lastStatus, !err.isEmpty {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.orange)
+                                        .font(.caption)
+                                    Text(err)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
                                 } else {
                                     Image(systemName: "clock")
                                         .foregroundStyle(.orange)

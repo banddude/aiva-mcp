@@ -97,6 +97,12 @@ final class SubprocessService: Service, Sendable {
             return enabledTools
         }
     }
+
+    nonisolated var lastStatus: String? {
+        return MainActor.assumeIsolated {
+            return (manager?.getLastError())
+        }
+    }
     
     deinit {
         Task { [manager] in
@@ -117,6 +123,8 @@ actor SubprocessMCPManager {
     private var transport: StdioTransport?
     private var availableTools: [Tool] = []
     private var isRunning = false
+    nonisolated(unsafe) private var lastError: String?
+    private var tempScriptPath: String?
     
     init(name: String, command: String, arguments: [String], environment: [String: String], workingDirectory: String?) {
         self.name = name
@@ -131,63 +139,138 @@ actor SubprocessMCPManager {
         
         // Create process
         let process = Process()
-        
-        // Check if command is npx or npm and use full path
-        let effectiveCommand: String
-        if self.command == "npx" || self.command == "npm" {
-            // Common paths for npm/npx on macOS (prioritize homebrew on Apple Silicon)
-            let possiblePaths = [
-                "/opt/homebrew/bin/npx",
-                "/opt/homebrew/bin/npm",
-                "/usr/local/bin/npx",
-                "/usr/local/bin/npm",
-                "~/.nvm/versions/node/v20.11.0/bin/npx",
-                "~/.nvm/versions/node/v20.11.0/bin/npm"
-            ]
-            
-            if self.command == "npx" {
-                if let npxPath = possiblePaths.filter({ $0.contains("npx") }).first(where: { FileManager.default.fileExists(atPath: NSString(string: $0).expandingTildeInPath) }) {
-                    effectiveCommand = NSString(string: npxPath).expandingTildeInPath
-                } else {
-                    effectiveCommand = self.command
+
+        // Helper: resolve absolute path to a command using login shell and common locations
+        func expand(_ path: String) -> String {
+            NSString(string: path).expandingTildeInPath
+        }
+        func isExecutable(_ path: String) -> Bool {
+            var isDir: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+            return exists && !isDir.boolValue && FileManager.default.isExecutableFile(atPath: path)
+        }
+        func resolveAbsoluteCommand(_ cmd: String) -> String? {
+            // Try login shell PATH
+            do {
+                let output = Pipe()
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/bin/zsh")
+                let escaped = cmd.replacingOccurrences(of: "'", with: "'\\''")
+                p.arguments = ["-l", "-c", "command -v '" + escaped + "' || true"]
+                p.standardOutput = output
+                p.standardError = Pipe()
+                try p.run()
+                p.waitUntilExit()
+                let data = output.fileHandleForReading.readDataToEndOfFile()
+                if let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), s.hasPrefix("/"), isExecutable(s) {
+                    return s
                 }
-            } else {
-                if let npmPath = possiblePaths.filter({ $0.contains("npm") }).first(where: { FileManager.default.fileExists(atPath: NSString(string: $0).expandingTildeInPath) }) {
-                    effectiveCommand = NSString(string: npmPath).expandingTildeInPath
-                } else {
-                    effectiveCommand = self.command
+            } catch {
+                // ignore
+            }
+
+            // Try common install locations
+            var candidates: [String] = [
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                "/usr/bin",
+                "/bin",
+                "/opt/local/bin",
+                "~/.volta/bin",
+                "~/.bun/bin",
+                "~/.local/share/pnpm",
+                "~/.local/bin",
+                "~/.deno/bin",
+                "~/.cargo/bin",
+                "~/.asdf/shims",
+                "~/.nodenv/shims",
+                "~/.fnm",
+                "/opt/homebrew/opt/node/bin",
+                "/usr/local/opt/node/bin",
+            ]
+            // Homebrew node@X formulas
+            let hbOpt = "/opt/homebrew/opt"
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: hbOpt) {
+                for entry in contents where entry.hasPrefix("node") {
+                    candidates.append("\(hbOpt)/\(entry)/bin")
                 }
             }
-        } else {
-            effectiveCommand = self.command
+            let ulOpt = "/usr/local/opt"
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: ulOpt) {
+                for entry in contents where entry.hasPrefix("node") {
+                    candidates.append("\(ulOpt)/\(entry)/bin")
+                }
+            }
+            // nvm versions
+            let nvmBase = expand("~/.nvm/versions/node")
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: nvmBase) {
+                let sorted = contents.sorted(by: >)
+                for ver in sorted { candidates.append(nvmBase + "/" + ver + "/bin") }
+            }
+            for dir in candidates {
+                let full = expand(dir) + "/" + cmd
+                if isExecutable(full) { return full }
+            }
+            return nil
         }
-        
-        // Setup environment with proper PATH
+
+        // Honor user's command/args, but use a managed Node runtime for node/npm/npx
+        var effectiveCommand: String = self.command
+        var effectiveArgs: [String] = self.arguments
         var processEnv = ProcessInfo.processInfo.environment
-        
-        // Add common Node.js paths to PATH
-        let additionalPaths = [
-            "/usr/local/bin",
-            "/opt/homebrew/bin",
-            "/usr/bin",
-            "/bin",
-            "~/.nvm/versions/node/v20.11.0/bin"
-        ]
-        
-        if var existingPath = processEnv["PATH"] {
-            let expandedPaths = additionalPaths.map { NSString(string: $0).expandingTildeInPath }
-            existingPath = expandedPaths.joined(separator: ":") + ":" + existingPath
-            processEnv["PATH"] = existingPath
-        } else {
-            let expandedPaths = additionalPaths.map { NSString(string: $0).expandingTildeInPath }
-            processEnv["PATH"] = expandedPaths.joined(separator: ":")
+        let nodeCommands: Set<String> = ["node", "npm", "npx"]
+
+        // Always prefer the app-managed Node by prepending it to PATH so any
+        // shebang like `#!/usr/bin/env node` resolves to our runtime.
+        if let binURL = await NodeRuntimeManager.shared.preferEmbeddedOrInstalled() {
+            let nodeBin = binURL.path
+            let existing = processEnv["PATH"] ?? "/usr/bin:/bin"
+            processEnv["PATH"] = nodeBin + ":" + existing
+
+            if nodeCommands.contains(self.command) {
+                switch self.command {
+                case "node":
+                    effectiveCommand = nodeBin + "/node"
+                case "npm":
+                    effectiveCommand = nodeBin + "/npm"
+                case "npx":
+                    // Prefer npm exec -y on modern Node; fall back to npx if available
+                    let npmPath = nodeBin + "/npm"
+                    let npxPath = nodeBin + "/npx"
+                    if FileManager.default.isExecutableFile(atPath: npmPath) {
+                        effectiveCommand = npmPath
+                        effectiveArgs = ["exec", "-y"] + effectiveArgs
+                    } else if FileManager.default.isExecutableFile(atPath: npxPath) {
+                        effectiveCommand = npxPath
+                    }
+                    if processEnv["npm_config_yes"] == nil { processEnv["npm_config_yes"] = "1" }
+                    processEnv["npm_config_update_notifier"] = "false"
+                    // Disable quarantine for npm packages in sandboxed apps
+                    processEnv["npm_config_ignore_scripts"] = "false"
+                    processEnv["ELECTRON_RUN_AS_NODE"] = "1"
+                default:
+                    break
+                }
+            }
+        } else if nodeCommands.contains(self.command) {
+            // No bundled Node found; do NOT fall back to system. Fail fast.
+            let msg = "Bundled Node runtime required but not found in app Resources"
+            print("❌ [Subprocess] \(msg)")
+            log.error("[Subprocess] \(msg)")
+            self.lastError = msg
+            throw NSError(domain: "SubprocessService", code: 1001, userInfo: [NSLocalizedDescriptionKey: msg])
         }
-        
         // Merge with any user-provided environment
         processEnv = processEnv.merging(self.environment) { _, new in new }
-        
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [effectiveCommand] + self.arguments
+
+        // Use absolute path if resolved, else env
+        if effectiveCommand.hasPrefix("/") {
+            process.executableURL = URL(fileURLWithPath: effectiveCommand)
+            process.arguments = effectiveArgs
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = [effectiveCommand] + effectiveArgs
+        }
         process.environment = processEnv
         
         // Set working directory - default to user's home directory if not specified
@@ -214,6 +297,20 @@ actor SubprocessMCPManager {
             let data = handle.availableData
             if !data.isEmpty, let errorString = String(data: data, encoding: .utf8) {
                 print("❌ [Subprocess] stderr from \(self.name): \(errorString)")
+                // Log to system log as well for debugging built apps
+                log.error("[Subprocess] stderr from \(self.name): \(errorString)")
+                
+                // Also write to a debug file for troubleshooting
+                let debugPath = "/tmp/aiva_subprocess_debug.log"
+                let timestamp = Date().description
+                let debugMessage = "[\(timestamp)] stderr from \(self.name): \(errorString)\n"
+                if let fileHandle = FileHandle(forWritingAtPath: debugPath) {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(debugMessage.data(using: .utf8) ?? Data())
+                    fileHandle.closeFile()
+                } else {
+                    try? debugMessage.write(toFile: debugPath, atomically: true, encoding: .utf8)
+                }
             }
         }
         
@@ -240,32 +337,93 @@ actor SubprocessMCPManager {
         
         // Start process
         do {
+            // Special handling for npm exec to bypass quarantine
+            if effectiveCommand.contains("/npm") && effectiveArgs.contains("exec") {
+                print("🔧 [Subprocess] Detected npm exec command, preparing quarantine bypass...")
+                print("🔧 [Subprocess] Command: \(effectiveCommand)")
+                print("🔧 [Subprocess] Arguments: \(effectiveArgs)")
+                
+                // Create a temporary script that will handle the execution
+                let scriptContent = """
+#!/bin/bash
+# Auto-generated script to bypass quarantine for npm exec
+export PATH="\(processEnv["PATH"] ?? "/usr/bin:/bin")"
+cd "\(process.currentDirectoryURL?.path ?? FileManager.default.homeDirectoryForCurrentUser.path)"
+
+# Clear quarantine from npm cache
+# Check both regular npm cache (with entitlements) and container cache
+for NPX_DIR in "$HOME/.npm/_npx" "$HOME/Library/Containers/com.mikeshaffer.AIVA/Data/.npm/_npx"; do
+    if [ -d "$NPX_DIR" ]; then
+        echo "Clearing quarantine from: $NPX_DIR"
+        find "$NPX_DIR" -name "*.js" -print0 2>/dev/null | xargs -0 -P 8 xattr -d com.apple.quarantine 2>/dev/null || true
+    fi
+done
+
+# Execute the npm command
+exec "\(effectiveCommand)" \(effectiveArgs.map { "\"\($0)\"" }.joined(separator: " "))
+"""
+                
+                let scriptPath = "/tmp/aiva_npm_exec_\(UUID().uuidString).sh"
+                try scriptContent.write(toFile: scriptPath, atomically: true, encoding: .utf8)
+                try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)
+                
+                // Store the script path for cleanup
+                self.tempScriptPath = scriptPath
+                
+                // Update process to run our script instead
+                process.executableURL = URL(fileURLWithPath: "/bin/bash")
+                process.arguments = [scriptPath]
+                
+                print("🔧 [Subprocess] Created quarantine bypass script at: \(scriptPath)")
+            }
+            
             try process.run()
-            print("✅ [Subprocess] Started process for \(self.name): \(effectiveCommand) \(self.arguments.joined(separator: " "))")
+            print("✅ [Subprocess] Started process for \(self.name): \(effectiveCommand) \(effectiveArgs.joined(separator: " "))")
             print("📍 [Subprocess] Working directory: \(process.currentDirectoryURL?.path ?? "(default)")")
             print("🔧 [Subprocess] PATH: \(processEnv["PATH"] ?? "(not set)")")
+            
+            // Write startup info to debug file
+            let debugPath = "/tmp/aiva_subprocess_startup.log"
+            let startupInfo = """
+            === SUBPROCESS STARTUP ===
+            Time: \(Date())
+            Name: \(self.name)
+            Command: \(effectiveCommand)
+            Args: \(effectiveArgs.joined(separator: " "))
+            Working Dir: \(process.currentDirectoryURL?.path ?? "default")
+            Script Created: \(self.tempScriptPath ?? "none")
+            ===
+            
+            """
+            try? startupInfo.write(toFile: debugPath, atomically: false, encoding: .utf8)
         } catch {
-            print("❌ [Subprocess] Failed to start process for \(self.name): \(error)")
+            let msg = "Failed to start process for \(self.name): \(error.localizedDescription)"
+            print("❌ [Subprocess] \(msg)")
+            self.lastError = msg
             throw error
         }
         
         // Give the process a moment to start
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second (increased from 0.5)
         
         // Check if process is still running
         if !process.isRunning {
             let exitCode = process.terminationStatus
+            let errorMsg = "Process exited immediately (code \(exitCode)). Check if \(self.command) is installed and accessible."
+            print("❌ [Subprocess] \(errorMsg)")
+            log.error("[Subprocess] \(errorMsg)")
+            self.lastError = errorMsg
             throw NSError(domain: "SubprocessService", code: Int(exitCode),
-                         userInfo: [NSLocalizedDescriptionKey: "Process exited immediately with code \(exitCode)"])
+                         userInfo: [NSLocalizedDescriptionKey: errorMsg])
         }
         
         // Connect MCP client with timeout
         do {
             // Create a timeout task
             let timeoutTask = Task {
-                try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds timeout
+                try await Task.sleep(nanoseconds: 30_000_000_000) // 30 seconds timeout (increased from 10)
                 throw NSError(domain: "SubprocessService", code: -1,
-                             userInfo: [NSLocalizedDescriptionKey: "Connection timeout after 10 seconds"])
+                             userInfo: [NSLocalizedDescriptionKey: "MCP connection timeout after 30 seconds. The subprocess may not be an MCP server."])
             }
             
             // Try to connect
@@ -277,7 +435,9 @@ actor SubprocessMCPManager {
                 timeoutTask.cancel()
             }
         } catch {
-            print("❌ [Subprocess] Failed to connect to MCP server for \(self.name): \(error)")
+            let msg = "Failed to connect to MCP server for \(self.name): \(error.localizedDescription)"
+            print("❌ [Subprocess] \(msg)")
+            self.lastError = msg
             if process.isRunning {
                 process.terminate()
             }
@@ -288,7 +448,7 @@ actor SubprocessMCPManager {
         let (tools, _) = try await client.listTools()
         print("🔧 [Subprocess] Retrieved \(tools.count) tools from subprocess")
         for tool in tools {
-            print("  📌 Tool: \(tool.name) - \(tool.description ?? "no description")")
+            print("  📌 Tool: \(tool.name) - \(tool.description)")
         }
         
         self.availableTools = tools.map { mcpTool in
@@ -296,7 +456,7 @@ actor SubprocessMCPManager {
                 name: mcpTool.name,
                 description: mcpTool.description,
                 inputSchema: mcpTool.inputSchema ?? .object(properties: [:], additionalProperties: true),
-                annotations: mcpTool.annotations ?? .init()
+                annotations: mcpTool.annotations
             ) { [weak self] arguments in
                 guard let self = self else {
                     throw NSError(domain: "SubprocessManager", code: 1, 
@@ -327,20 +487,20 @@ actor SubprocessMCPManager {
                         return [
                             "type": Value.string("image"),
                             "data": Value.string(data),
-                            "mimeType": Value.string(mimeType ?? ""),
+                            "mimeType": Value.string(mimeType),
                             "metadata": Value.object(metadata?.mapValues { Value.string("\($0)") } ?? [:])
                         ]
                     case .audio(let data, let mimeType):
                         return [
                             "type": Value.string("audio"),
                             "data": Value.string(data),
-                            "mimeType": Value.string(mimeType ?? "")
+                            "mimeType": Value.string(mimeType)
                         ]
                     case .resource(let uri, let mimeType, let text):
                         return [
                             "type": Value.string("resource"),
                             "uri": Value.string(uri),
-                            "mimeType": Value.string(mimeType ?? ""),
+                            "mimeType": Value.string(mimeType),
                             "text": Value.string(text ?? "")
                         ]
                     }
@@ -362,6 +522,13 @@ actor SubprocessMCPManager {
             process.waitUntilExit()
         }
         
+        // Clean up temporary script if it exists
+        if let scriptPath = self.tempScriptPath {
+            try? FileManager.default.removeItem(atPath: scriptPath)
+            print("🧹 [Subprocess] Cleaned up temporary script: \(scriptPath)")
+            self.tempScriptPath = nil
+        }
+        
         self.client = nil
         self.transport = nil
         self.process = nil
@@ -373,4 +540,6 @@ actor SubprocessMCPManager {
     func getAvailableTools() -> [Tool] {
         return self.availableTools
     }
+
+    nonisolated func getLastError() -> String? { self.lastError }
 }

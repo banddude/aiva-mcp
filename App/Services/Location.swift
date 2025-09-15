@@ -7,7 +7,7 @@ private let log = Logger.service("location")
 
 // CoreLocation types are not Sendable; we only pass instances across
 // continuations without mutation.
-extension CLLocation: @unchecked Sendable {}
+// Note: CLLocation already conforms to Sendable in newer SDKs
 
 @MainActor final class LocationService: NSObject, Service, CLLocationManagerDelegate, Sendable {
     private let locationManager = {

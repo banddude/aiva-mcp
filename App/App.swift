@@ -7,6 +7,11 @@ struct App: SwiftUI.App {
     @AppStorage("isEnabled") private var isEnabled = true
     @State private var isMenuPresented = false
 
+    init() {
+        // Start capturing stdout/stderr for in-app logs view
+        ConsoleCapture.shared.start()
+    }
+
     var body: some Scene {
         MenuBarExtra {
             ContentView(

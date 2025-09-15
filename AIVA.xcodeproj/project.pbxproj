@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E1A751632E789B9A0031D775 /* darwin-arm64 in Resources */ = {isa = PBXBuildFile; fileRef = E1A751622E789B9A0031D775 /* darwin-arm64 */; };
 		F809556E2D7888920055B911 /* TypedStream in Frameworks */ = {isa = PBXBuildFile; productRef = F809556D2D7888920055B911 /* TypedStream */; };
 		F80955702D7888920055B911 /* iMessage in Frameworks */ = {isa = PBXBuildFile; productRef = F809556F2D7888920055B911 /* iMessage */; };
 		F825BDBF2D9AD00E0063ADD7 /* ServiceLifecycle in Frameworks */ = {isa = PBXBuildFile; productRef = F825BDBE2D9AD00E0063ADD7 /* ServiceLifecycle */; };
@@ -47,6 +48,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E1A751622E789B9A0031D775 /* darwin-arm64 */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "darwin-arm64"; path = "Vendor/node/darwin-arm64"; sourceTree = "<group>"; };
 		F8F44E6D2D59038D0075D79C /* AIVA.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIVA.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F8F44EB62D5908D00075D79C /* aiva-server */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "aiva-server"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -111,6 +113,7 @@
 		F8F44E642D59038D0075D79C = {
 			isa = PBXGroup;
 			children = (
+				E1A751622E789B9A0031D775 /* darwin-arm64 */,
 				F8F44E6F2D59038D0075D79C /* App */,
 				F8F44EB72D5908D00075D79C /* CLI */,
 				F8F44E6E2D59038D0075D79C /* Products */,
@@ -239,6 +242,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E1A751632E789B9A0031D775 /* darwin-arm64 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -393,26 +397,25 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6D4T7VB2AF;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
-				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
-				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AIVA;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "${PRODUCT_NAME} needs access to the camera to take pictures for the MCP server.";
-				INFOPLIST_KEY_NSContactsUsageDescription = "${PRODUCT_NAME} needs access to your Contacts to provide contact information via MCP tools.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "AIVA needs to control other apps (Mail, Messages) to provide their functionality through the MCP server.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "AIVA needs access to the camera to take pictures for the MCP server.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "AIVA needs access to provide contact information to AI assistants through the MCP server.";
+				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2025 AIVA. All rights reserved.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "${PRODUCT_NAME} uses the local network to connect to the MCP server.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "AIVA needs access to provide location information to the MCP server.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AIVA needs access to provide location information to the MCP server.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "${PRODUCT_NAME} needs access to the microphone to record audio for the MCP server.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "AIVA uses the local network to connect to the MCP server.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AIVA needs microphone access for speech recognition features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "AIVA needs speech recognition to transcribe audio for AI assistants.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -458,33 +461,26 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 6D4T7VB2AF;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
-				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
-				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
-				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
-				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
-				ENABLE_RESOURCE_ACCESS_CONTACTS = YES;
-				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
-				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
 				ENABLE_RESOURCE_ACCESS_REMINDERS = YES;
-				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AIVA;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "${PRODUCT_NAME} needs access to the camera to take pictures for the MCP server.";
-				INFOPLIST_KEY_NSContactsUsageDescription = "${PRODUCT_NAME} needs access to your Contacts to provide contact information via MCP tools.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "AIVA needs to control other apps (Mail, Messages) to provide their functionality through the MCP server.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "AIVA needs access to the camera to take pictures for the MCP server.";
+				INFOPLIST_KEY_NSContactsUsageDescription = "AIVA needs access to provide contact information to AI assistants through the MCP server.";
+				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "© 2025 AIVA. All rights reserved.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "${PRODUCT_NAME} uses the local network to connect to the MCP server.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "AIVA needs access to provide location information to the MCP server.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AIVA needs access to provide location information to the MCP server.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "${PRODUCT_NAME} needs access to the microphone to record audio for the MCP server.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "AIVA uses the local network to connect to the MCP server.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AIVA needs microphone access for speech recognition features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "AIVA needs speech recognition to transcribe audio for AI assistants.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;

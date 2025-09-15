@@ -138,7 +138,7 @@ final class ContactsService: Service, Sendable {
     private func openContactsPrivacySettings() async {
         log.debug("Opening System Settings to Contacts privacy")
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts")!
-        await NSWorkspace.shared.open(url)
+        NSWorkspace.shared.open(url)
     }
 
     nonisolated var tools: [Tool] {

@@ -4,6 +4,28 @@
 <dict>
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>127.0.0.1</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_mcp._tcp</string>
@@ -12,20 +34,8 @@
 	<string>${PRODUCT_NAME} needs access to provide event information to the MCP server.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>${PRODUCT_NAME} needs access to provide reminders information to the MCP server.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>${PRODUCT_NAME} needs access to provide contact information to AI assistants through the MCP server.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>${PRODUCT_NAME} needs access to provide location information to AI assistants through the MCP server.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>${PRODUCT_NAME} needs access to provide location information to AI assistants through the MCP server.</string>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>${PRODUCT_NAME} needs to control other apps (Mail, Messages) to provide their functionality through the MCP server.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>${PRODUCT_NAME} needs screen recording permission to capture screenshots for AI assistants.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>${PRODUCT_NAME} needs microphone access for speech recognition features.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>${PRODUCT_NAME} needs speech recognition to transcribe audio for AI assistants.</string>
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
 	<key>SUFeedURL</key>

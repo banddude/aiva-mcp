@@ -238,13 +238,15 @@ without requiring you to manually share this data during your conversation.
 
 ### Subprocess MCP Servers
 
-AIVA can run other MCP servers as subprocesses, allowing you to use tools from npm packages like Playwright without installing them on every client:
+AIVA can run other MCP servers as subprocesses, allowing you to use tools from npm packages like Playwright without installing Node.js on your system. AIVA bundles a complete Node.js runtime, making it self-contained:
 
 1. Open Settings → Servers
 2. Add a new server with type "Subprocess"
 3. Enter the command (e.g., `npx`) and arguments (e.g., `@playwright/mcp@latest`)
 4. Enable the server using the dropdown toggle
 5. The subprocess will auto-start when AIVA launches
+
+The bundled Node.js runtime is located within the app bundle and is automatically used for all subprocess servers, eliminating the need for a system-wide Node.js installation.
 
 ### Remote MCP Servers
 
@@ -277,7 +279,7 @@ Control which clients can connect:
 
 ### App & CLI
 
-AIVA is a macOS app that bundles a command-line executable, `aiva-server`.
+AIVA is a macOS app that bundles a command-line executable, `aiva-server`, and a complete Node.js runtime.
 
 - [`AIVA.app`](/App/) provides UI for configuring services and — most importantly —
   a means of interacting with macOS system permissions,
@@ -286,6 +288,7 @@ AIVA is a macOS app that bundles a command-line executable, `aiva-server`.
 - [`aiva-server`](/CLI/) provides an MCP server that
   uses standard input/output for communication
   ([stdio transport][mcp-transports]).
+- **Bundled Node.js Runtime**: AIVA includes a self-contained Node.js runtime (v20.17.0) within the app bundle at `Contents/Resources/darwin-arm64/`, enabling subprocess MCP servers to run without requiring Node.js to be installed on the user's system.
 
 The app and CLI communicate with each other on the local network
 using [Bonjour][bonjour] for automatic discovery.

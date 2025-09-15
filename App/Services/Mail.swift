@@ -251,15 +251,27 @@ final class MailService: Service, Sendable {
             
             Tool(
                 name: "mail_read",
-                description: "Read the content of the currently selected email in Mail app",
+                description: "Read the content of an email by message ID or the currently selected email",
                 inputSchema: .object(
-                    properties: [:],
+                    properties: [
+                        "messageId": .string(description: "Optional message ID to read specific email"),
+                        "account": .string(description: "Optional account name if messageId is provided")
+                    ],
                     required: [],
                     additionalProperties: false
                 ),
                 annotations: .init(title: "Read Email", readOnlyHint: true, openWorldHint: false)
-            ) { _ in
-                let content = try await self.readSelectedEmail()
+            ) { input in
+                let messageId = input["messageId"]?.stringValue
+                let account = input["account"]?.stringValue
+                
+                let content: EmailContent
+                if let msgId = messageId, let acc = account {
+                    content = try await self.readEmailById(messageId: msgId, account: acc)
+                } else {
+                    content = try await self.readSelectedEmail()
+                }
+                
                 return "Subject: \(content.subject)\nFrom: \(content.sender)\nDate: \(content.dateSent)\n\n\(content.content)"
             }
             
@@ -769,6 +781,54 @@ final class MailService: Service, Sendable {
     
     // MARK: - Email Reading
     
+    func readEmailById(messageId: String, account: String) async throws -> EmailContent {
+        log.info("Reading email with ID \(messageId) from account \(account)")
+        
+        // First, open and select the message
+        let selectScript = """
+        tell application "Mail"
+            activate
+            repeat with eachAccount in accounts
+                if name of eachAccount contains "\(account)" then
+                    repeat with eachMailbox in mailboxes of eachAccount
+                        set targetMessages to (messages of eachMailbox whose id = \(messageId))
+                        if (count of targetMessages) > 0 then
+                            set targetMessage to item 1 of targetMessages
+                            -- Open the message in a viewer
+                            open targetMessage
+                            delay 1
+                            return "Message opened"
+                        end if
+                    end repeat
+                end if
+            end repeat
+            error "Message not found with ID: \(messageId)"
+        end tell
+        """
+        
+        _ = try await executeAppleScript(selectScript)
+        
+        // Now read the selected message
+        let readScript = """
+        tell application "Mail"
+            set selectedMessages to selection
+            if (count of selectedMessages) > 0 then
+                set theMessage to item 1 of selectedMessages
+                set messageSubject to subject of theMessage
+                set messageContent to content of theMessage
+                set messageSender to sender of theMessage
+                set messageDate to date sent of theMessage
+                return messageSubject & "|||" & messageContent & "|||" & messageSender & "|||" & messageDate
+            else
+                error "No email selected"
+            end if
+        end tell
+        """
+        
+        let output = try await executeAppleScript(readScript)
+        return parseEmailContentDelimited(output)
+    }
+    
     func readSelectedEmail() async throws -> EmailContent {
         log.info("Reading selected email")
         let script = """
@@ -785,6 +845,30 @@ final class MailService: Service, Sendable {
         
         let output = try await executeAppleScript(script)
         return parseEmailContent(output)
+    }
+    
+    private func parseEmailContentDelimited(_ output: String) -> EmailContent {
+        print("🔍 Raw email content: '\(output)'")
+        
+        let components = output.split(separator: "|||").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        
+        // AppleScript returns: subject|||content|||sender|||date
+        if components.count >= 4 {
+            let subject = String(components[0])
+            let content = String(components[1])
+            let sender = String(components[2])
+            let _ = String(components[3]) // dateString - not currently used
+            
+            print("📧 Parsed email: '\(subject)' from \(sender)")
+            
+            // Simple date parsing - could be enhanced
+            let dateSent = Date() // For now, use current date
+            
+            return EmailContent(subject: subject, content: content, sender: sender, dateSent: dateSent)
+        } else {
+            print("❌ Failed to parse email content - insufficient components")
+            return EmailContent(subject: "Unknown", content: "Failed to parse", sender: "Unknown", dateSent: Date())
+        }
     }
     
     private func parseEmailContent(_ output: String) -> EmailContent {
