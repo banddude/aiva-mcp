@@ -224,7 +224,7 @@ final class ServerController: ObservableObject {
                 // Use cached service if available, otherwise create new
                 if let cachedService = serviceCache[entry.id] {
                     let enableBinding = remoteEnabledBinding(for: entry.id)
-                    let iconName = cachedService is SubprocessService ? "terminal" : "shippingbox"
+                    let iconName = cachedService is SubprocessService ? "terminal.fill" : "globe.americas.fill"
                     let color: Color = cachedService is SubprocessService ? .yellow : .teal
                     let idPrefix = cachedService is SubprocessService ? "SubprocessService" : "RemoteServerService"
                     
@@ -246,7 +246,7 @@ final class ServerController: ObservableObject {
                         configs.append(
                             ServiceConfig(
                                 name: entry.name,
-                                iconName: "shippingbox",
+                                iconName: "globe.americas.fill",
                                 color: .teal,
                                 service: remote,
                                 binding: enableBinding,
@@ -259,7 +259,7 @@ final class ServerController: ObservableObject {
                         configs.append(
                             ServiceConfig(
                                 name: entry.name,
-                                iconName: "terminal",
+                                iconName: "terminal.fill",
                                 color: .yellow,
                                 service: subprocess,
                                 binding: enableBinding,
@@ -412,7 +412,7 @@ final class ServerController: ObservableObject {
                 }
             }
 
-            await networkManager.setConnectionApprovalHandler {
+            networkManager.setConnectionApprovalHandler {
                 [weak self] connectionID, clientInfo in
                 guard let self = self else {
                     return false

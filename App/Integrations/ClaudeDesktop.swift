@@ -3,10 +3,7 @@ import Foundation
 import MCP
 import OSLog
 
-// Temporarily disable concurrency warnings for Claude Desktop integration
-#if swift(>=6.0)
-#warning("Claude Desktop integration needs Swift 6 concurrency updates")
-#endif
+// Claude Desktop integration with Swift 6 concurrency support
 
 private let log = Logger.integration("claude-desktop")
 private let configPath =

@@ -10,7 +10,7 @@ import SwiftUI
 private let log = Logger.service("capture")
 
 // ScreenCaptureKit types are not Sendable; use with care on main actor.
-extension SCShareableContent: @unchecked Sendable {}
+extension SCShareableContent: @retroactive @unchecked Sendable {}
 
 @MainActor
 final class CaptureService: NSObject, Service, Sendable {

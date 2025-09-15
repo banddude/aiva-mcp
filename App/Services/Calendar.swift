@@ -19,8 +19,9 @@ final class CalendarService: Service, Sendable {
         }
     }
 
-    func activate() async throws {
-        try await eventStore.requestFullAccessToEvents()
+    nonisolated func activate() async throws {
+        let store = EKEventStore()
+        try await store.requestFullAccessToEvents()
     }
 
     nonisolated var tools: [Tool] {

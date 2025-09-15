@@ -19,7 +19,6 @@ struct ContentView: View {
     private let claudeDesktopColor = Color.orange
 
     private let aboutWindowController: AboutWindowController
-    private let settingsWindowController: SettingsWindowController
 
     private var serviceConfigs: [ServiceConfig] {
         serverController.computedServiceConfigs
@@ -41,7 +40,6 @@ struct ContentView: View {
         self._isEnabled = isEnabled
         self._isMenuPresented = isMenuPresented
         self.aboutWindowController = AboutWindowController()
-        self.settingsWindowController = SettingsWindowController(serverController: serverManager)
     }
 
     var body: some View {
@@ -154,7 +152,8 @@ struct ContentView: View {
                 Divider()
 
                 MenuButton("Settings...", isMenuPresented: $isMenuPresented) {
-                    settingsWindowController.showWindow(nil)
+                    let settingsController = SettingsWindowController.shared(serverController: serverController)
+                    settingsController.showWindow(nil)
                     NSApp.activate(ignoringOtherApps: true)
                 }
 

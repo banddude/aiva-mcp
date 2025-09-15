@@ -1,7 +1,7 @@
 import SwiftUI
 import JSONSchema
 
-struct ToolsCatalogView: View {
+struct ToolsView: View {
     let serviceConfigs: [ServiceConfig]
     @State private var query: String = ""
     @State private var expandedServices: Set<String> = []
@@ -22,9 +22,14 @@ struct ToolsCatalogView: View {
         VStack(spacing: 0) {
             // Header to match Clients/Memory
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: "hammer")
-                    .foregroundStyle(.blue)
-                    .font(.title2)
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.15))
+                    Image(systemName: "hammer")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.blue)
+                }
+                .frame(width: 32, height: 32)
                 Text("Tools")
                     .font(.title2)
                     .fontWeight(.semibold)
@@ -245,7 +250,7 @@ private struct ToolRow: View {
 
 #Preview {
     // Minimal preview with a couple of services
-    ToolsCatalogView(serviceConfigs: ServiceRegistry.configureServices(
+    ToolsView(serviceConfigs: ServiceRegistry.configureServices(
         calendarEnabled: .constant(true),
         captureEnabled: .constant(true),
         contactsEnabled: .constant(false),

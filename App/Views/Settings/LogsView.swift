@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-struct LogsSettingsView: View {
+struct LogsView: View {
     @StateObject private var console = ConsoleCapture.shared
     @State private var autoScroll = true
 

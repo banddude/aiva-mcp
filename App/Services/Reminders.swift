@@ -7,7 +7,7 @@ private let log = Logger.service("reminders")
 
 // EKReminder is not marked Sendable by EventKit, but we only pass
 // instances across continuations without mutation. Mark as unchecked.
-extension EKReminder: @unchecked Sendable {}
+extension EKReminder: @retroactive @unchecked Sendable {}
 
 @MainActor final class RemindersService: Service, Sendable {
     private let eventStore = EKEventStore()
@@ -20,8 +20,9 @@ extension EKReminder: @unchecked Sendable {}
         }
     }
 
-    func activate() async throws {
-        try await eventStore.requestFullAccessToReminders()
+    nonisolated func activate() async throws {
+        let store = EKEventStore()
+        try await store.requestFullAccessToReminders()
     }
 
     nonisolated var tools: [Tool] {

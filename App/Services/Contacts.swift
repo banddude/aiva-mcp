@@ -9,7 +9,7 @@ import AppKit
 private let log = Logger.service("contacts")
 
 // CNContactStore is pre-concurrency; we access it on the main actor.
-extension CNContactStore: @unchecked Sendable {}
+extension CNContactStore: @retroactive @unchecked Sendable {}
 
 
 private let contactProperties: OrderedDictionary<String, JSONSchema> = [

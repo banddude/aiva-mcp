@@ -106,12 +106,15 @@ final class RemoteServerService: Service, Sendable {
         let client = self.client ?? Client(name: "AIVA", version: "1.0.0")
 
         // Build URLSession configuration to include custom headers if provided
-        var configuration = URLSessionConfiguration.default
-        if let key = server.headerKey, let value = server.headerValue, !key.isEmpty, !value.isEmpty {
-            var headers = configuration.httpAdditionalHeaders as? [String: String] ?? [:]
-            headers[key] = value
-            configuration.httpAdditionalHeaders = headers
-        }
+        let configuration: URLSessionConfiguration = {
+            let config = URLSessionConfiguration.default
+            if let key = server.headerKey, let value = server.headerValue, !key.isEmpty, !value.isEmpty {
+                var headers = config.httpAdditionalHeaders as? [String: String] ?? [:]
+                headers[key] = value
+                config.httpAdditionalHeaders = headers
+            }
+            return config
+        }()
 
         // Heuristic: many servers expose SSE at "/sse" and POST at "/messages"
         // The SDK's HTTPClientTransport uses a single endpoint for both.
@@ -202,7 +205,7 @@ final class RemoteServerService: Service, Sendable {
         
         return Tool(
             name: mcpTool.name,
-            description: mcpTool.description ?? "",
+            description: mcpTool.description,
             inputSchema: schema,
             annotations: annotations
         ) { [weak self] (input: [String: Value]) async throws -> Value in
@@ -363,27 +366,27 @@ final class RemoteServerService: Service, Sendable {
             }
             // Otherwise return as text
             return .string(text)
-        case .image(let imageContent):
+        case let .image(data, mimeType, _):
             // Return image info as object
             return .object([
                 "type": .string("image"),
-                "data": .string(imageContent.data),
-                "mimeType": .string(imageContent.mimeType)
+                "data": .string(data),
+                "mimeType": .string(mimeType)
             ])
-        case .resource(let resourceContent):
+        case let .resource(uri, mimeType, text):
             // Return resource info as object
             return .object([
                 "type": .string("resource"),
-                "uri": .string(resourceContent.uri),
-                "text": .string(resourceContent.text ?? ""),
-                "mimeType": .string(resourceContent.mimeType ?? "")
+                "uri": .string(uri),
+                "text": .string(text ?? ""),
+                "mimeType": .string(mimeType)
             ])
-        case .audio(let audioContent):
+        case let .audio(data, mimeType):
             // Return audio info as object
             return .object([
                 "type": .string("audio"),
-                "data": .string(audioContent.data),
-                "mimeType": .string(audioContent.mimeType)
+                "data": .string(data),
+                "mimeType": .string(mimeType)
             ])
         }
     }
