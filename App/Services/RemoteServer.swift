@@ -64,10 +64,12 @@ final class RemoteServerService: Service, Sendable {
     private var client: Client?
     
     init?(server: ServerEntry) {
+        // Only handle SSE servers
+        guard server.type == .sse else { return nil }
         self.server = server
-        guard let url = URL(string: server.url) else { return nil }
+        guard let urlString = server.url, let url = URL(string: urlString) else { return nil }
         self.endpoint = url
-        self.cacheKey = "RemoteServer_\(server.name)_\(server.url)"
+        self.cacheKey = "RemoteServer_\(server.name)_\(urlString)"
         
         // Load cached tools on startup for immediate UI responsiveness
         if let cached = Self.loadCachedTools(cacheKey: cacheKey) {

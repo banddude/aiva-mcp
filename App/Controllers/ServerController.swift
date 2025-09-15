@@ -180,6 +180,9 @@ final class ServerController: ObservableObject {
     private let approvalWindowController = ConnectionApprovalWindowController()
 
     private let networkManager = ServerNetworkManager()
+    
+    // Cache for subprocess and remote services to prevent recreation
+    private var serviceCache: [UUID: any Service] = [:]
 
     // MARK: - AppStorage for Service Enablement States
     @AppStorage("calendarEnabled") private var calendarEnabled = false
@@ -218,18 +221,52 @@ final class ServerController: ObservableObject {
         // Append any custom remote servers as services
         if let extras = loadCustomServers() {
             for entry in extras {
-                if let remote = RemoteServerService(server: entry) {
+                // Use cached service if available, otherwise create new
+                if let cachedService = serviceCache[entry.id] {
                     let enableBinding = remoteEnabledBinding(for: entry.id)
+                    let iconName = cachedService is SubprocessService ? "terminal" : "shippingbox"
+                    let color: Color = cachedService is SubprocessService ? .yellow : .teal
+                    let idPrefix = cachedService is SubprocessService ? "SubprocessService" : "RemoteServerService"
+                    
                     configs.append(
                         ServiceConfig(
                             name: entry.name,
-                            iconName: "shippingbox",
-                            color: .teal,
-                            service: remote,
+                            iconName: iconName,
+                            color: color,
+                            service: cachedService,
                             binding: enableBinding,
-                            idOverride: "RemoteServerService_\(entry.id.uuidString)"
+                            idOverride: "\(idPrefix)_\(entry.id.uuidString)"
                         )
                     )
+                } else {
+                    // Create new service and cache it
+                    if let remote = RemoteServerService(server: entry) {
+                        serviceCache[entry.id] = remote
+                        let enableBinding = remoteEnabledBinding(for: entry.id)
+                        configs.append(
+                            ServiceConfig(
+                                name: entry.name,
+                                iconName: "shippingbox",
+                                color: .teal,
+                                service: remote,
+                                binding: enableBinding,
+                                idOverride: "RemoteServerService_\(entry.id.uuidString)"
+                            )
+                        )
+                    } else if let subprocess = SubprocessService(server: entry) {
+                        serviceCache[entry.id] = subprocess
+                        let enableBinding = remoteEnabledBinding(for: entry.id)
+                        configs.append(
+                            ServiceConfig(
+                                name: entry.name,
+                                iconName: "terminal",
+                                color: .yellow,
+                                service: subprocess,
+                                binding: enableBinding,
+                                idOverride: "SubprocessService_\(entry.id.uuidString)"
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -251,6 +288,11 @@ final class ServerController: ObservableObject {
     private func loadCustomServers() -> [ServerEntry]? {
         guard !customServersData.isEmpty,
               let arr = try? JSONDecoder().decode([ServerEntry].self, from: customServersData) else { return [] }
+        
+        // Clean up cache for servers that no longer exist
+        let currentIds = Set(arr.map { $0.id })
+        serviceCache = serviceCache.filter { currentIds.contains($0.key) }
+        
         return arr
     }
 
@@ -332,6 +374,29 @@ final class ServerController: ObservableObject {
             await networkManager.updateServiceBindings(self.currentServiceBindings)
             await self.networkManager.start()
             self.updateServerStatus("Running")
+            
+            // Auto-activate enabled subprocess servers
+            var anySubprocessActivated = false
+            for config in configs {
+                if config.binding.wrappedValue {
+                    if config.service is SubprocessService {
+                        do {
+                            try await config.service.activate()
+                            print("✅ [ServerController] Auto-started subprocess server: \(config.name)")
+                            anySubprocessActivated = true
+                        } catch {
+                            print("❌ [ServerController] Failed to auto-start subprocess server \(config.name): \(error)")
+                        }
+                    }
+                }
+            }
+            
+            // If any subprocess was activated, notify to update tools view
+            if anySubprocessActivated {
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
+                }
+            }
 
             // Listen for tool toggle changes and notify connected clients
             NotificationCenter.default.addObserver(forName: .aivaToolTogglesChanged, object: nil, queue: .main) { [weak self] _ in
@@ -381,6 +446,36 @@ final class ServerController: ObservableObject {
         let idMap = Dictionary(uniqueKeysWithValues: zip(services.map { ObjectIdentifier($0 as AnyObject) }, configs.map { $0.id }))
         await networkManager.setServices(services, idMap: idMap)
         await networkManager.updateServiceBindings(bindings)
+        
+        // Handle subprocess server activation/deactivation based on binding changes
+        for config in configs {
+            if let subprocess = config.service as? SubprocessService {
+                let shouldBeEnabled = config.binding.wrappedValue
+                let isCurrentlyActive = await subprocess.isActivated
+                
+                if shouldBeEnabled && !isCurrentlyActive {
+                    // Activate the subprocess server
+                    do {
+                        try await subprocess.activate()
+                        print("✅ [ServerController] Activated subprocess server: \(config.name)")
+                        // Notify that tools have changed
+                        await MainActor.run {
+                            NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
+                        }
+                    } catch {
+                        print("❌ [ServerController] Failed to activate subprocess server \(config.name): \(error)")
+                    }
+                } else if !shouldBeEnabled && isCurrentlyActive {
+                    // Deactivate the subprocess server
+                    await subprocess.deactivate()
+                    print("🛑 [ServerController] Deactivated subprocess server: \(config.name)")
+                    // Notify that tools have changed
+                    await MainActor.run {
+                        NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
+                    }
+                }
+            }
+        }
     }
 
     // Notify connected clients that the tool list may have changed (e.g., per-tool toggle)

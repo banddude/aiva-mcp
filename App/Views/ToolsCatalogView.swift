@@ -5,6 +5,7 @@ struct ToolsCatalogView: View {
     let serviceConfigs: [ServiceConfig]
     @State private var query: String = ""
     @State private var expandedServices: Set<String> = []
+    @State private var refreshID = UUID()
 
     init(serviceConfigs: [ServiceConfig]) {
         self.serviceConfigs = serviceConfigs
@@ -95,6 +96,11 @@ struct ToolsCatalogView: View {
                 .animation(.default, value: expandedServices)
                 .animation(.default, value: query)
             }
+        }
+        .id(refreshID)
+        .onReceive(NotificationCenter.default.publisher(for: .aivaToolTogglesChanged)) { _ in
+            // Force refresh when tools change
+            refreshID = UUID()
         }
     }
 
