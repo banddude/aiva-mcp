@@ -324,7 +324,11 @@ final class ServerController: ObservableObject {
 
     init() {
         Task {
-            // Set initial bindings before starting the server, using own @AppStorage values
+            // Compute and set initial services + bindings before starting the server
+            let configs = self.computedServiceConfigs
+            let services = configs.map { $0.service }
+            let idMap = Dictionary(uniqueKeysWithValues: zip(services.map { ObjectIdentifier($0 as AnyObject) }, configs.map { $0.id }))
+            await self.networkManager.setServices(services, idMap: idMap)
             await networkManager.updateServiceBindings(self.currentServiceBindings)
             await self.networkManager.start()
             self.updateServerStatus("Running")
@@ -337,6 +341,8 @@ final class ServerController: ObservableObject {
                     let services = configs.map { $0.service }
                     let idMap = Dictionary(uniqueKeysWithValues: zip(services.map { ObjectIdentifier($0 as AnyObject) }, configs.map { $0.id }))
                     await self.networkManager.setServices(services, idMap: idMap)
+                    // Ensure latest on/off bindings are applied immediately
+                    await self.networkManager.updateServiceBindings(self.currentServiceBindings)
                     await self.networkManager.notifyToolsChanged()
                 }
             }

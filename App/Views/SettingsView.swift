@@ -469,11 +469,24 @@ struct ServersSettingsView: View {
                         .padding(.vertical, 6)
                     } else {
                         VStack(spacing: 12) {
-                            ForEach($servers) { $server in
-                                ServerRowView(server: $server) {
-                                    save()
-                                    NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
-                                }
+                            ForEach(Array(servers.enumerated()), id: \.element.id) { index, _ in
+                                ServerRowView(
+                                    server: $servers[index],
+                                    didChange: {
+                                        save()
+                                        NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
+                                    },
+                                    onDelete: {
+                                        let id = servers[index].id
+                                        let removedList = servers.filter { $0.id == id }
+                                        servers.removeAll { $0.id == id }
+                                        save()
+                                        NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
+                                        if let removed = removedList.first {
+                                            print("[Servers] Removed server: \(removed.name) :: \(removed.url)")
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
@@ -546,6 +559,7 @@ struct ServersSettingsView: View {
     private struct ServerRowView: View {
         @Binding var server: ServerEntry
         var didChange: () -> Void
+        var onDelete: () -> Void
         @State private var isFetching = false
         @State private var status: String = ""
 
@@ -582,7 +596,7 @@ struct ServersSettingsView: View {
                     }
                     .buttonStyle(.bordered)
                     Button(role: .destructive) {
-                        NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
+                        onDelete()
                     } label: {
                         Image(systemName: "trash")
                     }
