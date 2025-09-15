@@ -1,28 +1,16 @@
-import Contacts
+@preconcurrency import Contacts
 import Foundation
 import JSONSchema
 import OSLog
 import Ontology
 import OrderedCollections
+import AppKit
 
 private let log = Logger.service("contacts")
 
-private let contactKeys =
-    [
-        CNContactTypeKey,
-        CNContactGivenNameKey,
-        CNContactFamilyNameKey,
-        CNContactBirthdayKey,
-        CNContactOrganizationNameKey,
-        CNContactJobTitleKey,
-        CNContactPhoneNumbersKey,
-        CNContactEmailAddressesKey,
-        CNContactInstantMessageAddressesKey,
-        CNContactSocialProfilesKey,
-        CNContactUrlAddressesKey,
-        CNContactPostalAddressesKey,
-        CNContactRelationsKey,
-    ] as [CNKeyDescriptor]
+// CNContactStore is pre-concurrency; we access it on the main actor.
+extension CNContactStore: @unchecked Sendable {}
+
 
 private let contactProperties: OrderedDictionary<String, JSONSchema> = [
     "givenName": .string(),
@@ -77,10 +65,27 @@ private let contactProperties: OrderedDictionary<String, JSONSchema> = [
     ),
 ]
 
-final class ContactsService: Service {
+@MainActor
+final class ContactsService: Service, Sendable {
     private let contactStore = CNContactStore()
 
-    static let shared = ContactsService()
+    static let shared: ContactsService = ContactsService()
+    
+    private static let contactKeys: [CNKeyDescriptor] = [
+        CNContactTypeKey as CNKeyDescriptor,
+        CNContactGivenNameKey as CNKeyDescriptor,
+        CNContactFamilyNameKey as CNKeyDescriptor,
+        CNContactBirthdayKey as CNKeyDescriptor,
+        CNContactOrganizationNameKey as CNKeyDescriptor,
+        CNContactJobTitleKey as CNKeyDescriptor,
+        CNContactPhoneNumbersKey as CNKeyDescriptor,
+        CNContactEmailAddressesKey as CNKeyDescriptor,
+        CNContactInstantMessageAddressesKey as CNKeyDescriptor,
+        CNContactSocialProfilesKey as CNKeyDescriptor,
+        CNContactUrlAddressesKey as CNKeyDescriptor,
+        CNContactPostalAddressesKey as CNKeyDescriptor,
+        CNContactRelationsKey as CNKeyDescriptor,
+    ]
 
     var isActivated: Bool {
         get async {
@@ -97,20 +102,30 @@ final class ContactsService: Service {
             log.debug("Contacts access authorized")
             return
         case .denied:
-            log.error("Contacts access denied")
+            log.warning("Contacts access denied - opening System Settings")
+            await openContactsPrivacySettings()
             throw NSError(
                 domain: "ContactsService", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Contacts access denied"]
+                userInfo: [NSLocalizedDescriptionKey: "Contacts access denied. Please enable access in System Settings → Privacy & Security → Contacts"]
             )
         case .restricted:
-            log.error("Contacts access restricted")
+            log.warning("Contacts access restricted - opening System Settings")
+            await openContactsPrivacySettings()
             throw NSError(
                 domain: "ContactsService", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Contacts access restricted"]
+                userInfo: [NSLocalizedDescriptionKey: "Contacts access restricted. Please check System Settings → Privacy & Security → Contacts"]
             )
         case .notDetermined:
             log.debug("Requesting contacts access")
-            _ = try await contactStore.requestAccess(for: .contacts)
+            let granted = try await contactStore.requestAccess(for: .contacts)
+            if !granted {
+                log.warning("Contacts access not granted - opening System Settings")
+                await openContactsPrivacySettings()
+                throw NSError(
+                    domain: "ContactsService", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Contacts access not granted. Please enable access in System Settings → Privacy & Security → Contacts"]
+                )
+            }
         @unknown default:
             log.error("Unknown contacts authorization status")
             throw NSError(
@@ -119,8 +134,14 @@ final class ContactsService: Service {
             )
         }
     }
+    
+    private func openContactsPrivacySettings() async {
+        log.debug("Opening System Settings to Contacts privacy")
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts")!
+        await NSWorkspace.shared.open(url)
+    }
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "contacts_me",
             description:
@@ -134,8 +155,8 @@ final class ContactsService: Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { _ in
-            let contact = try self.contactStore.unifiedMeContactWithKeys(toFetch: contactKeys)
+        ) { @MainActor _ in
+            let contact = try self.contactStore.unifiedMeContactWithKeys(toFetch: Self.contactKeys)
             return Person(contact)
         }
 
@@ -162,7 +183,7 @@ final class ContactsService: Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             var predicates: [NSPredicate] = []
 
             if case let .string(name) = arguments["name"] {
@@ -203,7 +224,7 @@ final class ContactsService: Service {
 
             let contacts = try self.contactStore.unifiedContacts(
                 matching: finalPredicate,
-                keysToFetch: contactKeys
+                keysToFetch: Self.contactKeys
             )
 
             return contacts.compactMap { Person($0) }
@@ -228,7 +249,7 @@ final class ContactsService: Service {
                 destructiveHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard case let .string(identifier) = arguments["identifier"], !identifier.isEmpty else {
                 throw NSError(
                     domain: "ContactsService", code: 1,
@@ -239,7 +260,7 @@ final class ContactsService: Service {
             // Fetch the mutable copy of the contact
             let predicate = CNContact.predicateForContacts(withIdentifiers: [identifier])
             let contact =
-                try self.contactStore.unifiedContacts(matching: predicate, keysToFetch: contactKeys)
+                try self.contactStore.unifiedContacts(matching: predicate, keysToFetch: Self.contactKeys)
                 .first?
                 .mutableCopy() as? CNMutableContact
 
@@ -279,7 +300,7 @@ final class ContactsService: Service {
                 readOnlyHint: false,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             // Create and populate a new contact
             let newContact = CNMutableContact()
             newContact.populate(from: arguments)

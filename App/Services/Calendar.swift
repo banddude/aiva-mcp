@@ -1,13 +1,14 @@
 import AppKit
 import CoreLocation
-import EventKit
+@preconcurrency import EventKit
 import Foundation
 import OSLog
 import Ontology
 
 private let log = Logger.service("calendar")
 
-final class CalendarService: Service {
+@MainActor
+final class CalendarService: Service, Sendable {
     private let eventStore = EKEventStore()
 
     static let shared = CalendarService()
@@ -22,7 +23,7 @@ final class CalendarService: Service {
         try await eventStore.requestFullAccessToEvents()
     }
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "calendars_list",
             description: "List available calendars",
@@ -35,7 +36,7 @@ final class CalendarService: Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
                 log.error("Calendar access not authorized")
                 throw NSError(
@@ -99,7 +100,7 @@ final class CalendarService: Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else {
                 log.error("Calendar access not authorized")
                 throw NSError(
@@ -296,7 +297,7 @@ final class CalendarService: Service {
                 destructiveHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             try await self.activate()
 
             guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else {

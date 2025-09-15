@@ -1,15 +1,19 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import AppKit
 import Foundation
 import OSLog
 import ObjectiveC
 import Ontology
-import ScreenCaptureKit
+@preconcurrency import ScreenCaptureKit
 import SwiftUI
 
 private let log = Logger.service("capture")
 
-final class CaptureService: NSObject, Service {
+// ScreenCaptureKit types are not Sendable; use with care on main actor.
+extension SCShareableContent: @unchecked Sendable {}
+
+@MainActor
+final class CaptureService: NSObject, Service, Sendable {
     static let shared = CaptureService()
 
     private var captureSession: AVCaptureSession?
@@ -24,8 +28,10 @@ final class CaptureService: NSObject, Service {
 
     deinit {
         log.info("Deinitializing capture service")
-        captureSession?.stopRunning()
-        audioRecorder?.stop()
+        MainActor.assumeIsolated {
+            captureSession?.stopRunning()
+            audioRecorder?.stop()
+        }
     }
 
     var isActivated: Bool {
@@ -93,7 +99,7 @@ final class CaptureService: NSObject, Service {
         }
     }
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "capture_take_picture",
             description: "Take a picture with the device camera",
@@ -155,7 +161,7 @@ final class CaptureService: NSObject, Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard await self.isActivated else {
                 throw NSError(
                     domain: "CaptureServiceError",
@@ -326,7 +332,7 @@ final class CaptureService: NSObject, Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             if AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
                 // Try to request permission if not authorized
                 try await self.requestPermission(for: .audio)
@@ -431,7 +437,7 @@ final class CaptureService: NSObject, Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             if !CGPreflightScreenCaptureAccess() {
                 // Try to request permission if not authorized
                 try await self.requestScreenRecordingPermission()

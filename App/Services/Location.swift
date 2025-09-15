@@ -1,11 +1,15 @@
-import CoreLocation
+@preconcurrency import CoreLocation
 import Foundation
 import OSLog
 import Ontology
 
 private let log = Logger.service("location")
 
-final class LocationService: NSObject, Service, CLLocationManagerDelegate {
+// CoreLocation types are not Sendable; we only pass instances across
+// continuations without mutation.
+extension CLLocation: @unchecked Sendable {}
+
+@MainActor final class LocationService: NSObject, Service, CLLocationManagerDelegate, Sendable {
     private let locationManager = {
         let manager = CLLocationManager()
         manager.activityType = .other
@@ -35,7 +39,9 @@ final class LocationService: NSObject, Service, CLLocationManagerDelegate {
 
     deinit {
         log.info("Deinitializing location service, stopping updates...")
-        locationManager.stopUpdatingLocation()
+        MainActor.assumeIsolated {
+            locationManager.stopUpdatingLocation()
+        }
     }
 
     var isActivated: Bool {
@@ -86,7 +92,7 @@ final class LocationService: NSObject, Service, CLLocationManagerDelegate {
         }
     }
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "location_current",
             description: "Get the user's current location",
@@ -99,10 +105,10 @@ final class LocationService: NSObject, Service, CLLocationManagerDelegate {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { _ in
+        ) { @MainActor _ in
             return try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<GeoCoordinates, Error>) in
-                Task {
+                Task { @MainActor in
                     let status = self.locationManager.authorizationStatus
 
                     guard status == .authorizedAlways else {
@@ -131,7 +137,7 @@ final class LocationService: NSObject, Service, CLLocationManagerDelegate {
                     // Modern timeout pattern using task group
                     let location = await withTaskGroup(of: CLLocation?.self) { group in
                         // Start location monitoring task
-                        group.addTask {
+                        group.addTask { @Sendable @MainActor in
                             while self.latestLocation == nil {
                                 try? await Task.sleep(nanoseconds: 100_000_000)
                                 if Task.isCancelled { return nil }
@@ -364,34 +370,40 @@ final class LocationService: NSObject, Service, CLLocationManagerDelegate {
 
     // MARK: - CLLocationManagerDelegate
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         log.debug("Location manager did update locations")
         if let location = locations.last {
-            self.latestLocation = location
+            MainActor.assumeIsolated {
+                self.latestLocation = location
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         log.error("Location manager failed with error: \(error.localizedDescription)")
     }
 
-    func locationManager(
+    nonisolated func locationManager(
         _ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus
     ) {
         switch status {
         case .authorizedWhenInUse, .authorizedAlways:
             log.debug("Location access authorized")
-            authorizationContinuation?.resume()
-            authorizationContinuation = nil
+            MainActor.assumeIsolated {
+                authorizationContinuation?.resume()
+                authorizationContinuation = nil
+            }
         case .denied, .restricted:
             log.error("Location access denied")
-            authorizationContinuation?.resume(
-                throwing: NSError(
+            MainActor.assumeIsolated {
+                authorizationContinuation?.resume(
+                    throwing: NSError(
                     domain: "LocationServiceError",
                     code: 7,
                     userInfo: [NSLocalizedDescriptionKey: "Location access denied"]
                 ))
-            authorizationContinuation = nil
+                authorizationContinuation = nil
+            }
         case .notDetermined:
             log.debug("Location access not determined")
             // Wait for the user to make a choice

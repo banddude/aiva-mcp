@@ -79,3 +79,4 @@ tell application "Mail" to make new outgoing message
 4. Email reading capabilities
 5. Draft and send functionality
 6. Full testing with Mail app integration
+- Do not try to restart or build the server. just speak to tell mike to do it for you when youre done with a change and ready to test it.

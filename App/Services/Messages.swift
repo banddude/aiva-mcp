@@ -9,7 +9,8 @@ private let messagesDatabasePath = "/Users/\(NSUserName())/Library/Messages/chat
 private let messagesDatabaseBookmarkKey: String = "me.mattt.AIVA.messagesDatabaseBookmark"
 private let defaultLimit = 30
 
-final class MessageService: NSObject, Service, NSOpenSavePanelDelegate {
+@MainActor
+final class MessageService: NSObject, Service, NSOpenSavePanelDelegate, Sendable {
     static let shared = MessageService()
 
     func activate() async throws {
@@ -48,7 +49,7 @@ final class MessageService: NSObject, Service, NSOpenSavePanelDelegate {
         }
     }
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "messages_fetch",
             description: "Fetch messages from the Messages app",
@@ -82,7 +83,7 @@ final class MessageService: NSObject, Service, NSOpenSavePanelDelegate {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             log.debug("Starting message fetch with arguments: \(arguments)")
             try await self.activate()
 

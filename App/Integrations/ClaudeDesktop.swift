@@ -3,6 +3,11 @@ import Foundation
 import MCP
 import OSLog
 
+// Temporarily disable concurrency warnings for Claude Desktop integration
+#if swift(>=6.0)
+#warning("Claude Desktop integration needs Swift 6 concurrency updates")
+#endif
+
 private let log = Logger.integration("claude-desktop")
 private let configPath =
     "/Users/\(NSUserName())/Library/Application Support/Claude/claude_desktop_config.json"
@@ -38,7 +43,7 @@ enum ClaudeDesktop {
         }
     }
 
-    static func showConfigurationPanel() {
+    @MainActor static func showConfigurationPanel() {
         do {
             log.debug("Loading existing Claude Desktop configuration")
             let (config, aivaServer) = try loadConfig()
@@ -188,7 +193,7 @@ private func loadConfig() throws -> ([String: Value], ClaudeDesktop.Config.MCPSe
     return (finalConfig, aivaServer)
 }
 
-private func updateConfig(
+@MainActor private func updateConfig(
     _ config: [String: Value],
     upserting aivaServer: ClaudeDesktop.Config.MCPServer
 )

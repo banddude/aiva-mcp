@@ -53,7 +53,7 @@ struct ServiceToggleView: View {
         }
         .frame(height: buttonSize)
         .padding(.horizontal, 14)
-        .task {
+        .task { @MainActor in
             isServiceActivated = await config.isActivated
         }
     }

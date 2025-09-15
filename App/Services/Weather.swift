@@ -6,12 +6,13 @@ import WeatherKit
 
 private let log = Logger.service("weather")
 
-final class WeatherService: Service {
+@MainActor
+final class WeatherService: Service, Sendable {
     static let shared = WeatherService()
 
     private let weatherService = WeatherKit.WeatherService.shared
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "weather_current",
             description:

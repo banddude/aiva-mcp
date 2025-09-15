@@ -4,7 +4,7 @@ import OSLog
 
 private let log = Logger.service("speech")
 
-final class SpeechService: Service {
+@MainActor final class SpeechService: Service, Sendable {
     static let shared = SpeechService()
     
     var isActivated: Bool {
@@ -18,7 +18,7 @@ final class SpeechService: Service {
         // No activation needed for speech
     }
     
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "speech_say",
             description: "Speak text aloud using macOS text-to-speech with the system default voice",

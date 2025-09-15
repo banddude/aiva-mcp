@@ -17,6 +17,7 @@ private let serviceDomain = "local."
 
 private let log = Logger.server
 
+@MainActor
 struct ServiceConfig: Identifiable {
     let id: String
     let name: String
@@ -36,9 +37,10 @@ struct ServiceConfig: Identifiable {
         iconName: String,
         color: Color,
         service: any Service,
-        binding: Binding<Bool>
+        binding: Binding<Bool>,
+        idOverride: String? = nil
     ) {
-        self.id = String(describing: type(of: service))
+        self.id = idOverride ?? String(describing: type(of: service))
         self.name = name
         self.iconName = iconName
         self.color = color
@@ -48,7 +50,7 @@ struct ServiceConfig: Identifiable {
 }
 
 enum ServiceRegistry {
-    static let services: [any Service] = [
+    @MainActor static let services: [any Service] = [
         CalendarService.shared,
         CaptureService.shared,
         ContactsService.shared,
@@ -63,7 +65,7 @@ enum ServiceRegistry {
         WeatherService.shared,
     ]
 
-    static func configureServices(
+    @MainActor static func configureServices(
         calendarEnabled: Binding<Bool>,
         captureEnabled: Binding<Bool>,
         contactsEnabled: Binding<Bool>,
@@ -173,8 +175,8 @@ final class ServerController: ObservableObject {
     @Published var pendingClientName: String = ""
 
     private var activeApprovalDialogs: Set<String> = []
-    private var pendingApprovals: [(String, () -> Void, () -> Void)] = []
-    private var currentApprovalHandlers: (approve: () -> Void, deny: () -> Void)?
+    private var pendingApprovals: [(String, @Sendable () -> Void, @Sendable () -> Void)] = []
+    private var currentApprovalHandlers: (approve: @Sendable () -> Void, deny: @Sendable () -> Void)?
     private let approvalWindowController = ConnectionApprovalWindowController()
 
     private let networkManager = ServerNetworkManager()
@@ -198,7 +200,7 @@ final class ServerController: ObservableObject {
 
     // MARK: - Computed Properties for Service Configurations and Bindings
     var computedServiceConfigs: [ServiceConfig] {
-        ServiceRegistry.configureServices(
+        var configs = ServiceRegistry.configureServices(
             calendarEnabled: $calendarEnabled,
             captureEnabled: $captureEnabled,
             contactsEnabled: $contactsEnabled,
@@ -212,12 +214,52 @@ final class ServerController: ObservableObject {
             utilitiesEnabled: $utilitiesEnabled,
             weatherEnabled: $weatherEnabled
         )
+
+        // Append any custom remote servers as services
+        if let extras = loadCustomServers() {
+            for entry in extras {
+                if let remote = RemoteServerService(server: entry) {
+                    let enableBinding = remoteEnabledBinding(for: entry.id)
+                    configs.append(
+                        ServiceConfig(
+                            name: entry.name,
+                            iconName: "shippingbox",
+                            color: .teal,
+                            service: remote,
+                            binding: enableBinding,
+                            idOverride: "RemoteServerService_\(entry.id.uuidString)"
+                        )
+                    )
+                }
+            }
+        }
+
+        return configs
     }
 
     private var currentServiceBindings: [String: Binding<Bool>] {
         Dictionary(
             uniqueKeysWithValues: computedServiceConfigs.map {
                 ($0.id, $0.binding)
+            }
+        )
+    }
+    
+    // MARK: - Custom Servers
+    @AppStorage("customServers") private var customServersData = Data()
+
+    private func loadCustomServers() -> [ServerEntry]? {
+        guard !customServersData.isEmpty,
+              let arr = try? JSONDecoder().decode([ServerEntry].self, from: customServersData) else { return [] }
+        return arr
+    }
+
+    private func remoteEnabledBinding(for id: UUID) -> Binding<Bool> {
+        let key = "remoteServerEnabled.\(id.uuidString)"
+        return Binding<Bool>(
+            get: { UserDefaults.standard.object(forKey: key) == nil ? true : UserDefaults.standard.bool(forKey: key) },
+            set: { newValue in
+                UserDefaults.standard.set(newValue, forKey: key)
             }
         )
     }
@@ -290,7 +332,13 @@ final class ServerController: ObservableObject {
             // Listen for tool toggle changes and notify connected clients
             NotificationCenter.default.addObserver(forName: .aivaToolTogglesChanged, object: nil, queue: .main) { [weak self] _ in
                 guard let self = self else { return }
-                Task { await self.networkManager.notifyToolsChanged() }
+                Task { @MainActor in
+                    let configs = self.computedServiceConfigs
+                    let services = configs.map { $0.service }
+                    let idMap = Dictionary(uniqueKeysWithValues: zip(services.map { ObjectIdentifier($0 as AnyObject) }, configs.map { $0.id }))
+                    await self.networkManager.setServices(services, idMap: idMap)
+                    await self.networkManager.notifyToolsChanged()
+                }
             }
 
             await networkManager.setConnectionApprovalHandler {
@@ -322,6 +370,10 @@ final class ServerController: ObservableObject {
     func updateServiceBindings(_ bindings: [String: Binding<Bool>]) async {
         // This function is still called by ContentView's onChange when user toggles services.
         // It ensures ServerNetworkManager is updated and clients are notified.
+        let configs = self.computedServiceConfigs
+        let services = configs.map { $0.service }
+        let idMap = Dictionary(uniqueKeysWithValues: zip(services.map { ObjectIdentifier($0 as AnyObject) }, configs.map { $0.id }))
+        await networkManager.setServices(services, idMap: idMap)
         await networkManager.updateServiceBindings(bindings)
     }
 
@@ -372,7 +424,7 @@ final class ServerController: ObservableObject {
     }
 
     private func showConnectionApprovalAlert(
-        clientID: String, approve: @escaping () -> Void, deny: @escaping () -> Void
+        clientID: String, approve: @escaping @Sendable () -> Void, deny: @escaping @Sendable () -> Void
     ) {
         log.notice("Connection approval requested for client: \(clientID)")
 
@@ -470,7 +522,7 @@ actor MCPConnectionManager {
         )
     }
 
-    func start(approvalHandler: @escaping (MCP.Client.Info) async -> Bool) async throws {
+    func start(approvalHandler: @escaping @Sendable (MCP.Client.Info) async -> Bool) async throws {
         // Prevent double start
         guard !isStarted && !isStopped else {
             log.warning("Connection \(self.connectionID) already started or stopped, ignoring start request")
@@ -500,7 +552,7 @@ actor MCPConnectionManager {
                 // Request user approval
                 let approved = await approvalHandler(clientInfo)
                 log.info(
-                    "Approval result for connection \(connectionID): \(approved ? "Approved" : "Denied")"
+                    "Approval result for connection \(self.connectionID): \(approved ? "Approved" : "Denied")"
                 )
 
                 if !approved {
@@ -687,7 +739,8 @@ actor NetworkDiscoveryManager {
     }
 }
 
-actor ServerNetworkManager {
+@MainActor
+final class ServerNetworkManager {
     private var isRunningState: Bool = false
     private var isEnabledState: Bool = true
     private var discoveryManager: NetworkDiscoveryManager?
@@ -699,8 +752,9 @@ actor ServerNetworkManager {
     typealias ConnectionApprovalHandler = @Sendable (UUID, MCP.Client.Info) async -> Bool
     private var connectionApprovalHandler: ConnectionApprovalHandler?
 
-    // Use ServiceRegistry for services
-    private let services = ServiceRegistry.services
+    // Services are dynamic (built-in + remote)
+    private var services: [any Service] = []
+    private var serviceIdMap: [ObjectIdentifier: String] = [:]
     private var serviceBindings: [String: Binding<Bool>] = [:]
 
     init() {
@@ -711,6 +765,63 @@ actor ServerNetworkManager {
             )
         } catch {
             log.error("Failed to initialize network discovery manager: \(error)")
+        }
+    }
+    
+    func initializeServices() async {
+        let registryServices = ServiceRegistry.services
+        self.services = registryServices
+    }
+    
+    private func handleClientApproval(connectionID: UUID, clientInfo: MCP.Client.Info, approvalHandler: ConnectionApprovalHandler) async -> Bool {
+        // Check for existing connection from same client
+        if let existingConnectionID = self.clientConnections[clientInfo.name] {
+            log.warning("Client \(clientInfo.name) already has connection \(existingConnectionID), closing old one")
+            await self.removeConnection(existingConnectionID)
+        }
+        
+        let approved = await approvalHandler(connectionID, clientInfo)
+        
+        // Track client connection if approved
+        if approved {
+            self.clientConnections[clientInfo.name] = connectionID
+        }
+        
+        return approved
+    }
+
+    func lookupServiceId(for service: any Service) -> String {
+        let key = ObjectIdentifier(service as AnyObject)
+        return serviceIdMap[key] ?? String(describing: type(of: service))
+    }
+
+    func setServices(_ services: [any Service], idMap: [ObjectIdentifier: String]) async {
+        self.services = services
+        self.serviceIdMap = idMap
+        // Notify connected clients that tools may have changed
+        for (_, connectionManager) in connections {
+            await connectionManager.notifyToolListChanged()
+        }
+
+        // Best-effort: activate remote servers to fetch tools automatically
+        Task { @MainActor in
+            var activatedAny = false
+            for service in services {
+                if let remote = service as? RemoteServerService {
+                    do {
+                        if await !remote.isActivated {
+                            try await remote.activate()
+                            activatedAny = true
+                        }
+                    } catch {
+                        log.error("Failed to activate remote server: \(error.localizedDescription)")
+                    }
+                }
+            }
+            if activatedAny {
+                // Tools changed after activation; notify clients again
+                await self.notifyToolsChanged()
+            }
         }
     }
 
@@ -912,20 +1023,7 @@ actor ServerNetworkManager {
 
                 // Start the MCP server with our approval handler
                 try await connectionManager.start { clientInfo in
-                    // Check for existing connection from same client
-                    if let existingConnectionID = self.clientConnections[clientInfo.name] {
-                        log.warning("Client \(clientInfo.name) already has connection \(existingConnectionID), closing old one")
-                        await self.removeConnection(existingConnectionID)
-                    }
-                    
-                    let approved = await approvalHandler(connectionID, clientInfo)
-                    
-                    // Track client connection if approved
-                    if approved {
-                        self.clientConnections[clientInfo.name] = connectionID
-                    }
-                    
-                    return approved
+                    return await self.handleClientApproval(connectionID: connectionID, clientInfo: clientInfo, approvalHandler: approvalHandler)
                 }
 
                 log.notice("Connection \(connectionID) successfully established")
@@ -971,7 +1069,7 @@ actor ServerNetworkManager {
         }
 
         // Register tools/list handler
-        await server.withMethodHandler(ListTools.self) { [weak self] _ in
+        await server.withMethodHandler(ListTools.self) { @MainActor [weak self] _ in
             guard let self = self else {
                 return ListTools.Result(tools: [])
             }
@@ -979,12 +1077,12 @@ actor ServerNetworkManager {
             log.debug("Handling ListTools request for \(connectionID)")
 
             var tools: [MCP.Tool] = []
-            if await self.isEnabledState {
-                for service in await self.services {
-                    let serviceId = String(describing: type(of: service))
+            if self.isEnabledState {
+                for service in self.services {
+                    let serviceId = self.lookupServiceId(for: service)
 
                     // Get the binding value in an actor-safe way
-                    if let isServiceEnabled = await self.serviceBindings[serviceId]?.wrappedValue,
+                    if let isServiceEnabled = self.serviceBindings[serviceId]?.wrappedValue,
                         isServiceEnabled
                     {
                         for tool in service.tools {
@@ -1016,7 +1114,7 @@ actor ServerNetworkManager {
         }
 
         // Register tools/call handler
-        await server.withMethodHandler(CallTool.self) { [weak self] params in
+        await server.withMethodHandler(CallTool.self) { @MainActor [weak self] params in
             guard let self = self else {
                 return CallTool.Result(
                     content: [.text("Server unavailable")],
@@ -1026,7 +1124,7 @@ actor ServerNetworkManager {
 
             log.notice("Tool call received from \(connectionID): \(params.name)")
 
-            guard await self.isEnabledState else {
+            guard self.isEnabledState else {
                 log.notice("Tool call rejected: AIVA is disabled")
                 return CallTool.Result(
                     content: [.text("AIVA is currently disabled. Please enable it to use tools.")],
@@ -1034,11 +1132,11 @@ actor ServerNetworkManager {
                 )
             }
 
-            for service in await self.services {
-                let serviceId = String(describing: type(of: service))
+            for service in self.services {
+                let serviceId = self.lookupServiceId(for: service)
 
                 // Get the binding value in an actor-safe way
-                if let isServiceEnabled = await self.serviceBindings[serviceId]?.wrappedValue,
+                if let isServiceEnabled = self.serviceBindings[serviceId]?.wrappedValue,
                     isServiceEnabled
                 {
                     do {
@@ -1052,6 +1150,7 @@ actor ServerNetworkManager {
                         }
 
                         log.notice("Tool \(params.name) executed successfully for \(connectionID)")
+                        print("🎭 [ServerController] Tool \(params.name) returned value: \(value)")
                         switch value {
                         case .data(let mimeType?, let data) where mimeType.hasPrefix("audio/"):
                             return CallTool.Result(

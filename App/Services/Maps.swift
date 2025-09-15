@@ -1,5 +1,5 @@
 import Foundation
-import MapKit
+@preconcurrency import MapKit
 import OSLog
 import Ontology
 
@@ -9,7 +9,8 @@ private let defaultSearchRadius: CLLocationDistance = 5000  // Default 5km
 private let defaultSearchLimit: Int = 10
 private let defaultMapImageSize: CGSize = CGSize(width: 1024, height: 1024)
 
-final class MapsService: NSObject, Service {
+@MainActor
+final class MapsService: NSObject, Service, Sendable {
     private let searchCompleter = MKLocalSearchCompleter()
     private var searchResults: [MKLocalSearchCompletion] = []
     private var searchContinuation: CheckedContinuation<[MKLocalSearchCompletion], Error>?
@@ -35,7 +36,7 @@ final class MapsService: NSObject, Service {
         try await LocationService.shared.activate()
     }
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "maps_search",
             description: "Search for places, addresses, points of interest by text query",
@@ -66,7 +67,7 @@ final class MapsService: NSObject, Service {
                 readOnlyHint: true,
                 openWorldHint: true
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard let query = arguments["query"]?.stringValue else {
                 throw NSError(
                     domain: "MapsServiceError", code: 1,
@@ -165,7 +166,7 @@ final class MapsService: NSObject, Service {
                 readOnlyHint: true,
                 openWorldHint: true
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             // Need either origin address or coordinates
             guard
                 arguments["originAddress"]?.stringValue != nil
@@ -278,7 +279,7 @@ final class MapsService: NSObject, Service {
                 readOnlyHint: true,
                 openWorldHint: true
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard let categoryString = arguments["category"]?.stringValue,
                 let latitude = arguments["latitude"]?.doubleValue,
                 let longitude = arguments["longitude"]?.doubleValue
@@ -362,7 +363,7 @@ final class MapsService: NSObject, Service {
                 readOnlyHint: true,
                 openWorldHint: true
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard let originLat = arguments["originLatitude"]?.doubleValue,
                 let originLng = arguments["originLongitude"]?.doubleValue,
                 let destLat = arguments["destinationLatitude"]?.doubleValue,
@@ -656,14 +657,18 @@ final class MapsService: NSObject, Service {
 
 // MARK: - MKLocalSearchCompleterDelegate
 extension MapsService: MKLocalSearchCompleterDelegate {
-    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
-        self.searchResults = completer.results
-        self.searchContinuation?.resume(returning: completer.results)
-        self.searchContinuation = nil
+    nonisolated func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        MainActor.assumeIsolated {
+            self.searchResults = completer.results
+            self.searchContinuation?.resume(returning: completer.results)
+            self.searchContinuation = nil
+        }
     }
 
-    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
-        self.searchContinuation?.resume(throwing: error)
-        self.searchContinuation = nil
+    nonisolated func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        MainActor.assumeIsolated {
+            self.searchContinuation?.resume(throwing: error)
+            self.searchContinuation = nil
+        }
     }
 }

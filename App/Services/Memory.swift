@@ -198,6 +198,7 @@ struct AnyCodable: Codable {
 
 // MARK: - Neo4j Memory Implementation (EXACT COPY)
 
+@MainActor
 class Neo4jMemory {
     private let neo4jUrl: String
     private let username: String
@@ -480,14 +481,15 @@ class Neo4jMemory {
 
 // MARK: - Service
 
-class MemoryService: Service {
+@MainActor
+class MemoryService: Service, Sendable {
     static let shared = MemoryService()
     private let memory = Neo4jMemory()
     
     private init() {}
     
     @ToolBuilder
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "read_graph",
             description: "Read the entire knowledge graph",
@@ -720,7 +722,7 @@ class MemoryService: Service {
     
     // MARK: - Implementation (EXACT Neo4j MCP behavior)
     
-    @Sendable
+    @MainActor
     private func readGraph(_ input: [String: Value]) async throws -> KnowledgeGraph {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -729,7 +731,7 @@ class MemoryService: Service {
         return try await memory.readGraph()
     }
     
-    @Sendable
+    @MainActor
     private func createEntities(_ input: [String: Value]) async throws -> [Entity] {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -762,7 +764,8 @@ class MemoryService: Service {
         return try await memory.createEntities(entities)
     }
     
-    @Sendable
+    
+    @MainActor
     private func createRelations(_ input: [String: Value]) async throws -> [Relation] {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -788,7 +791,8 @@ class MemoryService: Service {
         return try await memory.createRelations(relations)
     }
     
-    @Sendable
+    
+    @MainActor
     private func addObservations(_ input: [String: Value]) async throws -> [ObservationResult] {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -820,7 +824,8 @@ class MemoryService: Service {
         return try await memory.addObservations(observations)
     }
     
-    @Sendable
+    
+    @MainActor
     private func deleteEntities(_ input: [String: Value]) async throws -> String {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -843,7 +848,8 @@ class MemoryService: Service {
         return "Entities deleted successfully"
     }
     
-    @Sendable
+    
+    @MainActor
     private func deleteObservations(_ input: [String: Value]) async throws -> String {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -876,7 +882,8 @@ class MemoryService: Service {
         return "Observations deleted successfully"
     }
     
-    @Sendable
+    
+    @MainActor
     private func deleteRelations(_ input: [String: Value]) async throws -> String {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -903,7 +910,8 @@ class MemoryService: Service {
         return "Relations deleted successfully"
     }
     
-    @Sendable
+    
+    @MainActor
     private func searchMemories(_ input: [String: Value]) async throws -> KnowledgeGraph {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")
@@ -917,7 +925,8 @@ class MemoryService: Service {
         return try await memory.searchMemories(query)
     }
     
-    @Sendable
+    
+    @MainActor
     private func findMemoriesByName(_ input: [String: Value]) async throws -> KnowledgeGraph {
         guard memory.isConfigured else {
             throw MCPError.internalError("Neo4j Memory service is not configured. Please configure Neo4j connection in settings.")

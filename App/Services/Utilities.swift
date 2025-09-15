@@ -4,10 +4,10 @@ import OSLog
 
 private let log = Logger.service("utilities")
 
-final class UtilitiesService: Service {
+@MainActor final class UtilitiesService: Service, Sendable {
     static let shared = UtilitiesService()
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "utilities_beep",
             description: "Play a system sound",
@@ -25,7 +25,7 @@ final class UtilitiesService: Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { input in
+        ) { @MainActor input in
             let rawValue = input["sound"]?.stringValue ?? Sound.default.rawValue
             guard let sound = Sound(rawValue: rawValue) else {
                 log.error("Invalid sound: \(rawValue)")

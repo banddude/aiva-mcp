@@ -4,14 +4,30 @@ import OSLog
 
 private let log = Logger.service("mail")
 
-private class Box<T> {
-    var value: T
+private final class Box<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: T
+    
+    var value: T {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _value
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _value = newValue
+        }
+    }
+    
     init(_ value: T) {
-        self.value = value
+        self._value = value
     }
 }
 
-final class MailService: Service {
+@MainActor
+final class MailService: Service, Sendable {
     static let shared = MailService()
     
     var isActivated: Bool {
@@ -60,7 +76,7 @@ final class MailService: Service {
         }
     }
     
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
             // List accounts tool
             Tool(
                 name: "mail_list_accounts",
@@ -306,24 +322,20 @@ final class MailService: Service {
             task.standardOutput = pipe
             task.standardError = pipe
             
-            let lock = NSLock()
             let resumedBox = Box(false)
             
-            // Set a reasonable timeout
-            let timeoutTask = DispatchWorkItem {
-                lock.lock()
+            // Set a reasonable timeout using Task
+            let timeoutTask = Task {
+                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
                 if !resumedBox.value && task.isRunning {
                     resumedBox.value = true
                     task.terminate()
                     continuation.resume(throwing: MailError.appleScriptError("AppleScript execution timed out"))
                 }
-                lock.unlock()
             }
-            DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: timeoutTask)
             
             task.terminationHandler = { _ in
                 timeoutTask.cancel()
-                lock.lock()
                 if !resumedBox.value {
                     resumedBox.value = true
                     let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -336,18 +348,15 @@ final class MailService: Service {
                         continuation.resume(throwing: MailError.appleScriptError(errorMessage))
                     }
                 }
-                lock.unlock()
             }
             
             do {
                 try task.run()
             } catch {
-                lock.lock()
                 if !resumedBox.value {
                     resumedBox.value = true
                     continuation.resume(throwing: error)
                 }
-                lock.unlock()
             }
         }
     }

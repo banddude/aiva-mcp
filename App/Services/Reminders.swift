@@ -1,11 +1,15 @@
-import EventKit
+@preconcurrency import EventKit
 import Foundation
 import OSLog
 import Ontology
 
 private let log = Logger.service("reminders")
 
-final class RemindersService: Service {
+// EKReminder is not marked Sendable by EventKit, but we only pass
+// instances across continuations without mutation. Mark as unchecked.
+extension EKReminder: @unchecked Sendable {}
+
+@MainActor final class RemindersService: Service, Sendable {
     private let eventStore = EKEventStore()
 
     static let shared = RemindersService()
@@ -20,7 +24,7 @@ final class RemindersService: Service {
         try await eventStore.requestFullAccessToReminders()
     }
 
-    var tools: [Tool] {
+    nonisolated var tools: [Tool] {
         Tool(
             name: "reminders_lists",
             description: "List available reminder lists",
@@ -33,7 +37,7 @@ final class RemindersService: Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
                 log.error("Reminders access not authorized")
                 throw NSError(
@@ -88,7 +92,7 @@ final class RemindersService: Service {
                 readOnlyHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             try await self.activate()
 
             guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
@@ -144,9 +148,10 @@ final class RemindersService: Service {
             }
 
             // Fetch reminders
-            let reminders = try await withCheckedThrowingContinuation { continuation in
+            let reminders: [EKReminder] = try await withCheckedThrowingContinuation { continuation in
                 self.eventStore.fetchReminders(matching: predicate) { fetchedReminders in
-                    continuation.resume(returning: fetchedReminders ?? [])
+                    let sendableReminders = (fetchedReminders ?? [])
+                    continuation.resume(returning: sendableReminders)
                 }
             }
 
@@ -195,7 +200,7 @@ final class RemindersService: Service {
                 destructiveHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             try await self.activate()
 
             guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
@@ -289,7 +294,7 @@ final class RemindersService: Service {
                 destructiveHint: false,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             try await self.activate()
 
             guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
@@ -367,7 +372,7 @@ final class RemindersService: Service {
                 destructiveHint: true,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             try await self.activate()
 
             guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
@@ -412,7 +417,7 @@ final class RemindersService: Service {
                 destructiveHint: false,
                 openWorldHint: false
             )
-        ) { arguments in
+        ) { @MainActor arguments in
             try await self.activate()
 
             guard EKEventStore.authorizationStatus(for: .reminder) == .fullAccess else {
@@ -453,9 +458,10 @@ final class RemindersService: Service {
         // Fallback: scan all reminders and match identifier fields
         let calendars = eventStore.calendars(for: .reminder)
         let predicate = eventStore.predicateForReminders(in: calendars)
-        let reminders = try await withCheckedThrowingContinuation { continuation in
+        let reminders: [EKReminder] = try await withCheckedThrowingContinuation { continuation in
             self.eventStore.fetchReminders(matching: predicate) { fetchedReminders in
-                continuation.resume(returning: fetchedReminders ?? [])
+                let sendableReminders = (fetchedReminders ?? [])
+                continuation.resume(returning: sendableReminders)
             }
         }
         return reminders.first {
