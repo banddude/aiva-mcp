@@ -323,44 +323,23 @@ struct ContentView: View {
             .path
         
         Task {
+            // Only use native write (idempotent) to avoid duplicate TOML sections
+            // Still make a backup via shell for user safety
             let command = """
-            # Edit Codex config TOML directly
             CODEX_CONFIG="$HOME/.codex/config.toml"
             BACKUP_CONFIG="$HOME/.codex/config.toml.backup.$(date +%s)"
-            
-            # Backup the config
-            cp "$CODEX_CONFIG" "$BACKUP_CONFIG"
-            echo "Backed up Codex config to: $BACKUP_CONFIG"
-            
-            if [ "\(newValue)" = "true" ]; then
-                # Add aiva section to TOML
-                echo "" >> "$CODEX_CONFIG"
-                echo "[mcp_servers.aiva]" >> "$CODEX_CONFIG"
-                echo "command = \\"\(serverPath)\\"" >> "$CODEX_CONFIG"
-                echo "args = []" >> "$CODEX_CONFIG"
-                echo "Added AIVA to Codex CLI config"
-            else
-                # Remove all aiva sections from TOML using awk
-                awk '
-                /^\\[mcp_servers\\.aiva\\]/ { skip=3; next }
-                skip > 0 { skip--; next }
-                { print }
-                ' "$CODEX_CONFIG" > "$CODEX_CONFIG.tmp"
-                mv "$CODEX_CONFIG.tmp" "$CODEX_CONFIG"
-                echo "Removed AIVA from Codex CLI config"
+            if [ -f "$CODEX_CONFIG" ]; then
+              cp "$CODEX_CONFIG" "$BACKUP_CONFIG" && echo "Backed up Codex config to: $BACKUP_CONFIG"
             fi
             """
-            
-            // Native write (sandbox-safe): update ~/.codex/config.toml
+
+            // Native write (sandbox-safe): update ~/.codex/config.toml idempotently
             do {
                 let url = FileManager.default.homeDirectoryForCurrentUser
                     .appendingPathComponent(".codex/config.toml")
                 var text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-                if newValue {
-                    if !text.contains("[mcp_servers.aiva]") {
-                        text.append("\n[mcp_servers.aiva]\ncommand = \"\(serverPath)\"\nargs = []\n")
-                    }
-                } else {
+                // Always remove any existing [mcp_servers.aiva] block first
+                do {
                     let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
                     var filtered: [Substring] = []
                     var skipping = false
@@ -371,6 +350,12 @@ struct ContentView: View {
                         if !skipping { filtered.append(line) }
                     }
                     text = filtered.joined(separator: "\n")
+                }
+
+                if newValue {
+                    // Append a single canonical block to avoid duplicates
+                    let block = "\n[mcp_servers.aiva]\ncommand = \"\(serverPath)\"\nargs = []\n"
+                    text.append(block)
                 }
                 try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try text.write(to: url, atomically: true, encoding: .utf8)
@@ -394,7 +379,7 @@ struct ContentView: View {
                 let output = String(data: data, encoding: .utf8) ?? ""
                 
                 if process.terminationStatus == 0 {
-                    print("Codex CLI operation successful: \(output)")
+                    print("Codex CLI backup successful: \(output)")
                 } else {
                     print("Failed Codex CLI operation: \(output)")
                     // Revert the toggle if the operation failed
