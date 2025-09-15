@@ -61,6 +61,41 @@ and a [growing list of clients][mcp-clients] that support the
     <td><strong>Weather</strong></td>
     <td>Access current weather conditions including temperature, wind speed, and weather conditions for any location.</td>
   </tr>
+  <tr>
+    <th>
+      <img src="Assets/mail.svg" width="48" height="48" alt="" role="presentation"/>
+    </th>
+    <td><strong>Mail</strong></td>
+    <td>Search, read, reply, forward, and compose emails through the macOS Mail app using keyboard shortcuts and AppleScript integration.</td>
+  </tr>
+  <tr>
+    <th>
+      <img src="Assets/capture.svg" width="48" height="48" alt="" role="presentation"/>
+    </th>
+    <td><strong>Screen Capture</strong></td>
+    <td>Take screenshots of the entire screen, specific windows, or selected areas with optional delays and clipboard support.</td>
+  </tr>
+  <tr>
+    <th>
+      <img src="Assets/speech.svg" width="48" height="48" alt="" role="presentation"/>
+    </th>
+    <td><strong>Speech</strong></td>
+    <td>Convert text to speech using macOS's built-in voices, with options for speaking directly or saving to audio files.</td>
+  </tr>
+  <tr>
+    <th>
+      <img src="Assets/memory.svg" width="48" height="48" alt="" role="presentation"/>
+    </th>
+    <td><strong>Memory</strong></td>
+    <td>Store and retrieve persistent memories across conversations, allowing Claude to remember important context and information.</td>
+  </tr>
+  <tr>
+    <th>
+      <img src="Assets/utilities.svg" width="48" height="48" alt="" role="presentation"/>
+    </th>
+    <td><strong>Utilities</strong></td>
+    <td>Generate QR codes and barcodes in various formats, manipulate system clipboard, and perform other utility functions.</td>
+  </tr>
 </table>
 
 ## Getting Started
@@ -177,7 +212,8 @@ You'll be prompted to approve the connection.
 <br clear="all">
 
 After approving the connection,
-you should now see 🔨12 in the bottom right corner of your chat box.
+you should now see a tools indicator (e.g., 🔨24) in the bottom right corner of your chat box.
+The number shows how many tools are currently enabled.
 Click on that to see a list of all the tools made available to Claude
 by AIVA.
 
@@ -198,6 +234,45 @@ without requiring you to manually share this data during your conversation.
   <img width="738" src="/Assets/claude-desktop-screenshot-message.png" alt="Screenshot of Claude response to user message 'How's the weather where I am?'" />
 </p>
 
+## Advanced Features
+
+### Subprocess MCP Servers
+
+AIVA can run other MCP servers as subprocesses, allowing you to use tools from npm packages like Playwright without installing them on every client:
+
+1. Open Settings → Servers
+2. Add a new server with type "Subprocess"
+3. Enter the command (e.g., `npx`) and arguments (e.g., `@playwright/mcp@latest`)
+4. Enable the server using the dropdown toggle
+5. The subprocess will auto-start when AIVA launches
+
+### Remote MCP Servers
+
+Connect to external MCP servers over HTTP/SSE:
+
+1. Open Settings → Servers
+2. Add a new server with type "SSE"
+3. Enter the server URL and any required authentication headers
+4. Click "Fetch Tools" to load available tools
+
+### Tool Management
+
+All tools can be individually enabled or disabled:
+
+1. Open Settings → Tools
+2. Browse tools organized by service
+3. Toggle individual tools on/off as needed
+4. Changes take effect immediately for connected clients
+
+### Client Management
+
+Control which clients can connect:
+
+1. Open Settings → Clients
+2. View connected clients and their trust status
+3. Remove trusted clients to require re-approval
+4. Connection approvals appear as system notifications
+
 ## Technical Details
 
 ### App & CLI
@@ -207,6 +282,7 @@ AIVA is a macOS app that bundles a command-line executable, `aiva-server`.
 - [`AIVA.app`](/App/) provides UI for configuring services and — most importantly —
   a means of interacting with macOS system permissions,
   so that it can access Contacts, Calendar, and other information.
+  The app includes a comprehensive Settings window for managing services, servers, tools, and clients.
 - [`aiva-server`](/CLI/) provides an MCP server that
   uses standard input/output for communication
   ([stdio transport][mcp-transports]).
@@ -223,7 +299,8 @@ for implementation details.
 For this project, we created what became
 [the official Swift SDK][swift-sdk]
 for Model Context Protocol servers and clients.
-The app uses this package to handle proxied requests from MCP clients.
+The app uses this package to handle proxied requests from MCP clients,
+and to connect to subprocess and remote MCP servers.
 
 ### iMessage Database Access
 
