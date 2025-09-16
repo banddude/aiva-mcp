@@ -47,7 +47,7 @@ private struct AboutView: View {
             // Keep only "Report an Issue..." link; Website/Docs removed
             Button("Report an Issue...") {
                 NSWorkspace.shared.open(
-                    URL(string: "https://github.com/banddude/AIVA/issues/new")!
+                    URL(string: "https://github.com/banddude/aiva-mcp/issues/new")!
                 )
             }
             .buttonStyle(.link)
