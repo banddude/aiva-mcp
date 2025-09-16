@@ -55,10 +55,11 @@ enum ServiceRegistry {
         CaptureService.shared,
         ContactsService.shared,
         LocationService.shared,
-        MapsService.shared,
         MailService.shared,
+        MapsService.shared,
         MemoryService.shared,
         MessageService.shared,
+        AppleMusicService.shared,
         RemindersService.shared,
         SpeechService.shared,
         UtilitiesService.shared,
@@ -66,6 +67,7 @@ enum ServiceRegistry {
     ]
 
     @MainActor static func configureServices(
+        appleMusicEnabled: Binding<Bool>,
         calendarEnabled: Binding<Bool>,
         captureEnabled: Binding<Bool>,
         contactsEnabled: Binding<Bool>,
@@ -137,6 +139,13 @@ enum ServiceRegistry {
                 binding: messagesEnabled
             ),
             ServiceConfig(
+                name: "Music",
+                iconName: AppIconManager.shared.getIconName(for: "Music"),
+                color: .pink,
+                service: AppleMusicService.shared,
+                binding: appleMusicEnabled
+            ),
+            ServiceConfig(
                 name: "Reminders",
                 iconName: AppIconManager.shared.getIconName(for: "Reminders"),
                 color: .orange,
@@ -185,6 +194,7 @@ final class ServerController: ObservableObject {
     private var serviceCache: [UUID: any Service] = [:]
 
     // MARK: - AppStorage for Service Enablement States
+    @AppStorage("appleMusicEnabled") private var appleMusicEnabled = false
     @AppStorage("calendarEnabled") private var calendarEnabled = false
     @AppStorage("captureEnabled") private var captureEnabled = false
     @AppStorage("contactsEnabled") private var contactsEnabled = false
@@ -204,6 +214,7 @@ final class ServerController: ObservableObject {
     // MARK: - Computed Properties for Service Configurations and Bindings
     var computedServiceConfigs: [ServiceConfig] {
         var configs = ServiceRegistry.configureServices(
+            appleMusicEnabled: $appleMusicEnabled,
             calendarEnabled: $calendarEnabled,
             captureEnabled: $captureEnabled,
             contactsEnabled: $contactsEnabled,

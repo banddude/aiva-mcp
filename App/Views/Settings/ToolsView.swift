@@ -288,6 +288,7 @@ private struct SquareToolCard: View {
 #Preview {
     // Minimal preview with a couple of services
     ToolsView(serviceConfigs: ServiceRegistry.configureServices(
+        appleMusicEnabled: .constant(true),
         calendarEnabled: .constant(true),
         captureEnabled: .constant(true),
         contactsEnabled: .constant(false),

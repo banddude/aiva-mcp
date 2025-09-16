@@ -70,6 +70,13 @@ and a [growing list of clients][mcp-clients] that support the
   </tr>
   <tr>
     <th>
+      <img src="Assets/music.svg" width="48" height="48" alt="" role="presentation"/>
+    </th>
+    <td><strong>Music</strong></td>
+    <td>Stream and control Apple Music playback including songs, albums, and playlists with search, playback controls, and subscription management through MusicKit integration.</td>
+  </tr>
+  <tr>
+    <th>
       <img src="Assets/capture.svg" width="48" height="48" alt="" role="presentation"/>
     </th>
     <td><strong>Screen Capture</strong></td>

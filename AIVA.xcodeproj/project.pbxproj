@@ -407,6 +407,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "AIVA needs to control other apps (Mail, Messages) to provide their functionality through the MCP server.";
+				INFOPLIST_KEY_NSAppleMusicUsageDescription = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AIVA needs access to the camera to take pictures for the MCP server.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "AIVA needs access to provide contact information to AI assistants through the MCP server.";
 				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "AIVA needs access to the Downloads folder to manage downloaded files for AI assistants.";
@@ -414,8 +415,8 @@
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "AIVA uses the local network to connect to the MCP server.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "${PRODUCT_NAME} needs microphone access for speech recognition features.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "${PRODUCT_NAME} needs speech recognition to transcribe audio for AI assistants.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AIVA needs microphone access for speech recognition features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "AIVA needs speech recognition to transcribe audio for AI assistants.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -472,6 +473,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "AIVA needs to control other apps (Mail, Messages) to provide their functionality through the MCP server.";
+				INFOPLIST_KEY_NSAppleMusicUsageDescription = "";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AIVA needs access to the camera to take pictures for the MCP server.";
 				INFOPLIST_KEY_NSContactsUsageDescription = "AIVA needs access to provide contact information to AI assistants through the MCP server.";
 				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "AIVA needs access to the Downloads folder to manage downloaded files for AI assistants.";
@@ -479,8 +481,8 @@
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "AIVA uses the local network to connect to the MCP server.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "AIVA needs access to provide location information to AI assistants through the MCP server.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "${PRODUCT_NAME} needs microphone access for speech recognition features.";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "${PRODUCT_NAME} needs speech recognition to transcribe audio for AI assistants.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "AIVA needs microphone access for speech recognition features.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "AIVA needs speech recognition to transcribe audio for AI assistants.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
