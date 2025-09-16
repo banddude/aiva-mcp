@@ -177,14 +177,12 @@ private struct SquareToolCard: View {
         VStack(alignment: .leading, spacing: 8) {
             // Top row: service icon + toggle
             HStack(alignment: .center) {
-                ZStack {
-                    Circle()
-                        .fill(serviceColor.opacity(0.15))
-                    Image(systemName: serviceIconName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(serviceColor)
-                }
-                .frame(width: 24, height: 24)
+                UnifiedIconView(
+                    iconName: serviceIconName,
+                    color: serviceColor,
+                    size: 24,
+                    isEnabled: true
+                )
 
                 Spacer(minLength: 0)
 

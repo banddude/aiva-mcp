@@ -241,14 +241,12 @@ struct ServersView: View {
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill((server.type == .sse ? Color.accentColor : Color.yellow).opacity(0.15))
-                        Image(systemName: server.type == .sse ? "globe.americas.fill" : "terminal.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(server.type == .sse ? Color.accentColor : Color.yellow)
-                    }
-                    .frame(width: 26, height: 26)
+                    UnifiedIconView(
+                        iconName: AppIconManager.shared.getServerIcon(for: server.type),
+                        color: AppIconManager.shared.getServerColor(for: server.type),
+                        size: 26,
+                        isEnabled: true
+                    )
                     .padding(.top, 6) // Align with text field center
                     
                     VStack(alignment: .leading, spacing: 2) {

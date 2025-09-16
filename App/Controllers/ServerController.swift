@@ -82,42 +82,42 @@ enum ServiceRegistry {
         [
             ServiceConfig(
                 name: "Calendar",
-                iconName: "calendar",
+                iconName: AppIconManager.shared.getIconName(for: "Calendar"),
                 color: .red,
                 service: CalendarService.shared,
                 binding: calendarEnabled
             ),
             ServiceConfig(
                 name: "Capture",
-                iconName: "camera.on.rectangle.fill",
+                iconName: AppIconManager.shared.getIconName(for: "Capture"),
                 color: .gray.mix(with: .black, by: 0.7),
                 service: CaptureService.shared,
                 binding: captureEnabled
             ),
             ServiceConfig(
                 name: "Contacts",
-                iconName: "person.crop.square.filled.and.at.rectangle.fill",
+                iconName: AppIconManager.shared.getIconName(for: "Contacts"),
                 color: .brown,
                 service: ContactsService.shared,
                 binding: contactsEnabled
             ),
             ServiceConfig(
                 name: "Location",
-                iconName: "location.fill",
-                color: .blue,
+                iconName: AppIconManager.shared.getIconName(for: "Location"),
+                color: .cyan,
                 service: LocationService.shared,
                 binding: locationEnabled
             ),
             ServiceConfig(
                 name: "Mail",
-                iconName: "envelope.fill",
+                iconName: AppIconManager.shared.getIconName(for: "Mail"),
                 color: .indigo,
                 service: MailService.shared,
                 binding: mailEnabled
             ),
             ServiceConfig(
                 name: "Maps",
-                iconName: "mappin.and.ellipse",
+                iconName: AppIconManager.shared.getIconName(for: "Maps"),
                 color: .purple,
                 service: MapsService.shared,
                 binding: mapsEnabled
@@ -131,35 +131,35 @@ enum ServiceRegistry {
             ),
             ServiceConfig(
                 name: "Messages",
-                iconName: "message.fill",
+                iconName: AppIconManager.shared.getIconName(for: "Messages"),
                 color: .green,
                 service: MessageService.shared,
                 binding: messagesEnabled
             ),
             ServiceConfig(
                 name: "Reminders",
-                iconName: "list.bullet",
+                iconName: AppIconManager.shared.getIconName(for: "Reminders"),
                 color: .orange,
                 service: RemindersService.shared,
                 binding: remindersEnabled
             ),
             ServiceConfig(
                 name: "Speech",
-                iconName: "speaker.wave.3.fill",
-                color: .pink,
+                iconName: AppIconManager.shared.getIconName(for: "Speech"),
+                color: .red.mix(with: .black, by: 0.3),
                 service: SpeechService.shared,
                 binding: speechEnabled
             ),
             ServiceConfig(
                 name: "Utilities",
-                iconName: "wrench.and.screwdriver",
+                iconName: AppIconManager.shared.getIconName(for: "Utilities"),
                 color: .gray,
                 service: UtilitiesService.shared,
                 binding: utilitiesEnabled
             ),
             ServiceConfig(
                 name: "Weather",
-                iconName: "cloud.sun.fill",
+                iconName: AppIconManager.shared.getIconName(for: "Weather"),
                 color: .cyan,
                 service: WeatherService.shared,
                 binding: weatherEnabled
@@ -224,8 +224,8 @@ final class ServerController: ObservableObject {
                 // Use cached service if available, otherwise create new
                 if let cachedService = serviceCache[entry.id] {
                     let enableBinding = remoteEnabledBinding(for: entry.id)
-                    let iconName = cachedService is SubprocessService ? "terminal.fill" : "globe.americas.fill"
-                    let color: Color = cachedService is SubprocessService ? .yellow : .teal
+                    let iconName = entry.icon ?? AppIconManager.shared.getServerIcon(for: cachedService is SubprocessService ? .subprocess : .sse)
+                    let color: Color = AppIconManager.shared.getServerColor(for: cachedService is SubprocessService ? .subprocess : .sse)
                     let idPrefix = cachedService is SubprocessService ? "SubprocessService" : "RemoteServerService"
                     
                     configs.append(
@@ -246,8 +246,8 @@ final class ServerController: ObservableObject {
                         configs.append(
                             ServiceConfig(
                                 name: entry.name,
-                                iconName: "globe.americas.fill",
-                                color: .teal,
+                                iconName: entry.icon ?? AppIconManager.shared.getServerIcon(for: .sse),
+                                color: AppIconManager.shared.getServerColor(for: .sse),
                                 service: remote,
                                 binding: enableBinding,
                                 idOverride: "RemoteServerService_\(entry.id.uuidString)"
@@ -256,11 +256,12 @@ final class ServerController: ObservableObject {
                     } else if let subprocess = SubprocessService(server: entry) {
                         serviceCache[entry.id] = subprocess
                         let enableBinding = remoteEnabledBinding(for: entry.id)
+                        print("🔧 [ServerController] Created SubprocessService config for: \(entry.name), enabled: \(enableBinding.wrappedValue)")
                         configs.append(
                             ServiceConfig(
                                 name: entry.name,
-                                iconName: "terminal.fill",
-                                color: .yellow,
+                                iconName: entry.icon ?? AppIconManager.shared.getServerIcon(for: .subprocess),
+                                color: AppIconManager.shared.getServerColor(for: .subprocess),
                                 service: subprocess,
                                 binding: enableBinding,
                                 idOverride: "SubprocessService_\(entry.id.uuidString)"
@@ -286,14 +287,34 @@ final class ServerController: ObservableObject {
     @AppStorage("customServers") private var customServersData = Data()
 
     private func loadCustomServers() -> [ServerEntry]? {
-        guard !customServersData.isEmpty,
-              let arr = try? JSONDecoder().decode([ServerEntry].self, from: customServersData) else { return [] }
+        // Start with built-in servers
+        let chromeId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let builtInServers = [
+            ServerEntry(
+                id: chromeId,
+                name: "Chrome",
+                command: "npx",
+                arguments: ["@playwright/mcp@latest"],
+                icon: AppIconManager.shared.getIconName(for: "Chrome")
+            )
+        ]
+        
+        // Load user-added custom servers
+        var customServers: [ServerEntry] = []
+        if !customServersData.isEmpty,
+           let arr = try? JSONDecoder().decode([ServerEntry].self, from: customServersData) {
+            customServers = arr
+        }
+        
+        // Combine built-in and custom servers
+        let allServers = builtInServers + customServers
+        print("🔍 [ServerController] Loading servers: \(allServers.map { "\($0.name) (type: \($0.type))" })")
         
         // Clean up cache for servers that no longer exist
-        let currentIds = Set(arr.map { $0.id })
+        let currentIds = Set(allServers.map { $0.id })
         serviceCache = serviceCache.filter { currentIds.contains($0.key) }
         
-        return arr
+        return allServers
     }
 
     private func remoteEnabledBinding(for id: UUID) -> Binding<Bool> {
@@ -365,6 +386,9 @@ final class ServerController: ObservableObject {
     }
 
     init() {
+        // Load system app icons at startup
+        AppIconManager.shared.loadAppIcons()
+        
         Task {
             // Compute and set initial services + bindings before starting the server
             let configs = self.computedServiceConfigs
