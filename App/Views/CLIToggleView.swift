@@ -9,6 +9,8 @@ struct CLIToggleView: View {
     @Binding var isActive: Bool
     let action: (Bool) -> Void
     let launchAction: (() -> Void)?
+    let connectedClientId: String?
+    let onUnlinkClient: ((String) -> Void)?
     
     // MARK: Environment
     @Environment(\.colorScheme) private var colorScheme
@@ -22,7 +24,6 @@ struct CLIToggleView: View {
         HStack {
             Button(action: {
                 let newValue = !isActive
-                isActive = newValue
                 action(newValue)
             }) {
                 Circle()
@@ -40,9 +41,39 @@ struct CLIToggleView: View {
             .disabled(!isAppEnabled)
             .frame(width: buttonSize, height: buttonSize)
             
-            Text(name)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .foregroundColor(isAppEnabled ? Color.primary : .primary.opacity(0.5))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundColor(isAppEnabled ? Color.primary : .primary.opacity(0.5))
+                
+                if let clientId = connectedClientId {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("Connected (\(clientId))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        
+                        if let onUnlinkClient = onUnlinkClient {
+                            Button("Unlink", role: .destructive) {
+                                onUnlinkClient(clientId)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.mini)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.gray.opacity(0.4))
+                            .frame(width: 6, height: 6)
+                        Text("Not connected")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
             
             if let launchAction = launchAction, isActive {
                 Button(action: launchAction) {
@@ -55,7 +86,7 @@ struct CLIToggleView: View {
                 .help("Launch \(name)")
             }
         }
-        .frame(height: buttonSize)
+        .frame(minHeight: 44)
         .padding(.horizontal, 14)
     }
     

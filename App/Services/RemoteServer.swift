@@ -270,7 +270,6 @@ final class RemoteServerService: Service, Sendable {
         
         // Create URLSession without Expect: 100-continue
         let config = URLSessionConfiguration.ephemeral
-        config.httpShouldUsePipelining = false
         config.httpShouldSetCookies = false
         let session = URLSession(configuration: config)
         

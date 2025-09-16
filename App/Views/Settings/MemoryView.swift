@@ -53,97 +53,88 @@ struct MemoryView: View {
     }
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Header
-                HStack(alignment: .center, spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.blue.opacity(0.15))
-                        Image(systemName: "brain")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.blue)
-                    }
-                    .frame(width: 32, height: 32)
-                    Text("Memory")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Spacer()
-                    Button {
-                        testConnection()
-                    } label: {
-                        HStack(spacing: 6) {
-                            switch connectionStatus {
-                            case .testing:
-                                ProgressView()
-                                    .controlSize(.small)
-                                Text("Connecting...")
-                            case .connected:
+        VStack(alignment: .leading, spacing: 0) {
+            // Header matching AgentsView style
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Memory")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        
+                        // Connection status and tool count
+                        HStack(spacing: 4) {
+                            if connectionStatus == .connected {
                                 Image(systemName: "checkmark.circle.fill")
-                                Text("Connected")
-                            case .disconnected:
-                                Image(systemName: "arrow.clockwise.circle")
-                                Text("Retry")
-                            case .unknown:
-                                Image(systemName: "bolt.horizontal.circle")
-                                Text("Connect")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                                Text("\(MemoryService.shared.tools.count) tools available")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Image(systemName: connectionStatus == .testing ? "clock" : "exclamationmark.triangle.fill")
+                                    .foregroundStyle(connectionStatus == .testing ? .orange : .red)
+                                    .font(.caption)
+                                Text(connectionStatus == .testing ? "Testing connection..." : "Not connected")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(connectButtonTint)
-                    .disabled(connectionStatus == .testing)
-
-                    Button("Clear") {
-                        neo4jUrl = ""
-                        neo4jUsername = ""
-                        neo4jPassword = ""
-                        neo4jDatabase = "neo4j"
-                    }
-                    .buttonStyle(.bordered)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-                // Card: Connection Settings
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Configure your Neo4j connection for memory storage.")
+                    
+                    Text("Configure Neo4j knowledge graph storage")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+            }
+            .padding(.bottom, 20)
 
-                    // Simple vertical layout to prevent text wrapping
-                    VStack(spacing: 16) {
-                        // Database Name and URL row
-                        HStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                labelRow(icon: "cylinder.fill", color: .orange, title: "Database")
-                                TextField("neo4j", text: $neo4jDatabase)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .monospaced))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    
+                    // Memory Service Card
+                    VStack(alignment: .leading, spacing: 12) {
+                        
+                        // Configuration fields
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Database")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    TextField("neo4j", text: $neo4jDatabase)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .monospaced))
+                                }
+                                .frame(minWidth: 100)
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Username")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    TextField("Username", text: $neo4jUsername)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .monospaced))
+                                }
+                                .frame(minWidth: 120)
                             }
-                            .frame(minWidth: 120)
                             
                             VStack(alignment: .leading, spacing: 6) {
-                                labelRow(icon: "link", color: .blue, title: "Database URL")
+                                Text("Database URL")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
                                 TextField("neo4j+s://your-instance.databases.neo4j.io", text: $neo4jUrl)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(.body, design: .monospaced))
                             }
-                        }
-                        
-                        // Username and Password row
-                        HStack(spacing: 16) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                labelRow(icon: "person.crop.square.filled.and.at.rectangle.fill", color: .green, title: "Username")
-                                TextField("Username", text: $neo4jUsername)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .monospaced))
-                            }
-                            .frame(minWidth: 120)
                             
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
-                                    labelRow(icon: "lock.fill", color: .purple, title: "Password")
+                                    Text("Password")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
                                     Spacer()
                                     Button(action: { showPassword.toggle() }) {
                                         Image(systemName: showPassword ? "eye.slash" : "eye")
@@ -164,19 +155,25 @@ struct MemoryView: View {
                             }
                         }
                     }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 14)
+                    .background(Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+                    )
+                    
+                    Spacer()
                 }
-                .padding(16)
-                .background(Color(NSColor.controlBackgroundColor))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(NSColor.separatorColor), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
             }
         }
-        .background(Color(NSColor.controlBackgroundColor))
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
-            checkConnectionStatus()
+            // Auto-test connection on first appear if configured
+            if connectionStatus == .unknown && !neo4jUrl.isEmpty && !neo4jUsername.isEmpty && !neo4jPassword.isEmpty {
+                testConnection()
+            }
         }
         .onChange(of: neo4jUrl) { _, _ in checkConnectionStatus() }
         .onChange(of: neo4jUsername) { _, _ in checkConnectionStatus() }
@@ -205,8 +202,11 @@ struct MemoryView: View {
     }
     
     private func checkConnectionStatus() {
-        // Set to unknown when settings change, requiring a test
-        connectionStatus = .unknown
+        // Only reset connection status when settings actually change
+        // If we're already connected/disconnected, don't reset to unknown
+        if connectionStatus == .connected || connectionStatus == .disconnected {
+            connectionStatus = .unknown
+        }
     }
 
     private func labelRow(icon: String, color: Color, title: String) -> some View {

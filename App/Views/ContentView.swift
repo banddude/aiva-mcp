@@ -7,16 +7,6 @@ struct ContentView: View {
     @Binding var isEnabled: Bool
     @Binding var isMenuPresented: Bool
     @Environment(\.openSettings) private var openSettings
-    @State private var isInClaudeCodeCLI: Bool = false
-    @State private var isInGemini: Bool = false
-    @State private var isInCodex: Bool = false
-    @State private var isInClaudeDesktop: Bool = false
-    
-    // Brand colors for CLI toggles
-    private let claudeColor = Color.orange
-    private let geminiColor = Color(red: 0.26, green: 0.52, blue: 1.0) // Google Blue
-    private let codexColor = Color(red: 0.16, green: 0.66, blue: 0.58) // OpenAI Teal
-    private let claudeDesktopColor = Color.orange
 
     private let aboutWindowController: AboutWindowController
 
@@ -85,68 +75,6 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.3), value: isEnabled)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Divider()
-                
-                Text("Agent Integrations")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .opacity(isEnabled ? 1.0 : 0.4)
-                    .padding(.horizontal, 14)
-
-                CLIToggleView(
-                    name: "Claude Desktop",
-                    logoImageName: "claude-logo",
-                    brandColor: claudeDesktopColor,
-                    isEnabled: $isEnabled,
-                    isActive: $isInClaudeDesktop,
-                    action: performClaudeDesktopToggleAction,
-                    launchAction: launchClaudeDesktop
-                )
-
-                CLIToggleView(
-                    name: "Claude Code CLI",
-                    logoImageName: "claude-logo",
-                    brandColor: claudeColor,
-                    isEnabled: $isEnabled,
-                    isActive: $isInClaudeCodeCLI,
-                    action: performToggleAction,
-                    launchAction: launchClaudeCodeCLI
-                )
-
-                CLIToggleView(
-                    name: "Gemini CLI",
-                    logoImageName: "gemini-logo",
-                    brandColor: geminiColor,
-                    isEnabled: $isEnabled,
-                    isActive: $isInGemini,
-                    action: performGeminiToggleAction,
-                    launchAction: launchGeminiCLI
-                )
-
-                CLIToggleView(
-                    name: "Codex CLI",
-                    logoImageName: "codex-logo",
-                    brandColor: codexColor,
-                    isEnabled: $isEnabled,
-                    isActive: $isInCodex,
-                    action: performCodexToggleAction,
-                    launchAction: launchCodexCLI
-                )
-
-                MenuButton("Copy server command to clipboard", isMenuPresented: $isMenuPresented) {
-                    let command = Bundle.main.bundleURL
-                        .appendingPathComponent("Contents/MacOS/aiva-server")
-                        .path
-
-                    let pasteboard = NSPasteboard.general
-                    pasteboard.clearContents()
-                    pasteboard.setString(command, forType: .string)
-                }
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 2)
-            .padding(.horizontal, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Divider()
@@ -170,14 +98,66 @@ struct ContentView: View {
             .padding(.horizontal, 2)
         }
         .padding(.vertical, 6)
-        .background(Material.thick)
-        .task {
-            // Check CLI states when view appears
-            isInClaudeCodeCLI = Self.checkIfAIVAInCLI()
-            isInGemini = Self.checkIfAIVAInGemini()
-            isInCodex = Self.checkIfAIVAInCodex()
-            isInClaudeDesktop = Self.checkIfAIVAInClaudeDesktop()
-        }
+        .background(
+            // Liquid Glass layered effect with high translucency
+            ZStack {
+                // Base glass layer - much more transparent
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.4)
+                
+                // Secondary glass layer for depth - very subtle
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.thinMaterial)
+                    .opacity(0.15)
+                    .blur(radius: 0.8)
+                
+                // Specular highlight layer - glass-like edges
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(.white.opacity(0.25), lineWidth: 0.5)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                .white.opacity(0.12),
+                                .clear,
+                                .black.opacity(0.03)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    )
+                
+                // Dynamic reflection layer - very subtle
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                .white.opacity(0.06),
+                                .clear,
+                                .white.opacity(0.02)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .blur(radius: 1.2)
+                    
+                // Additional glass reflection for liquid effect
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        RadialGradient(
+                            gradient: Gradient(colors: [
+                                .white.opacity(0.04),
+                                .clear
+                            ]),
+                            center: .topLeading,
+                            startRadius: 10,
+                            endRadius: 60
+                        )
+                    )
+            }
+        )
     }
     
     static func checkIfAIVAInCLI() -> Bool {
@@ -214,331 +194,6 @@ struct ContentView: View {
               let servers = json["mcpServers"] as? [String: Any]
         else { return false }
         return servers["aiva"] != nil
-    }
-    
-    private func performToggleAction(_ newValue: Bool) {
-        let serverPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/aiva-server")
-            .path
-        Task {
-            let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
-            do {
-                var root: [String: Any] = [:]
-                if let data = try? Data(contentsOf: url),
-                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    root = obj
-                }
-                var servers = root["mcpServers"] as? [String: Any] ?? [:]
-                if newValue {
-                    servers["aiva"] = [
-                        "type": "stdio",
-                        "command": serverPath,
-                        "args": [],
-                        "env": [:]
-                    ]
-                } else {
-                    servers.removeValue(forKey: "aiva")
-                }
-                root["mcpServers"] = servers
-                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
-                try data.write(to: url, options: .atomic)
-            } catch {
-                print("Failed to update Claude Code CLI config: \(error)")
-                await MainActor.run { isInClaudeCodeCLI = !newValue }
-            }
-        }
-    }
-    
-    private func performGeminiToggleAction(_ newValue: Bool) {
-        let serverPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/aiva-server")
-            .path
-        
-        Task {
-            let command = """
-            # Edit Gemini config JSON directly
-            GEMINI_CONFIG="$HOME/.gemini/settings.json"
-            BACKUP_CONFIG="$HOME/.gemini/settings.json.backup.$(date +%s)"
-            
-            # Backup the config
-            cp "$GEMINI_CONFIG" "$BACKUP_CONFIG"
-            echo "Backed up Gemini config to: $BACKUP_CONFIG"
-            
-            if [ "\(newValue)" = "true" ]; then
-                # Add aiva
-                jq '.mcpServers.aiva = {
-                    "command": "\(serverPath)",
-                    "args": [],
-                    "trust": true
-                }' "$GEMINI_CONFIG" > "$GEMINI_CONFIG.tmp" && mv "$GEMINI_CONFIG.tmp" "$GEMINI_CONFIG"
-                echo "Added AIVA to Gemini CLI config"
-            else
-                # Remove aiva
-                jq 'del(.mcpServers.aiva)' "$GEMINI_CONFIG" > "$GEMINI_CONFIG.tmp" && mv "$GEMINI_CONFIG.tmp" "$GEMINI_CONFIG"
-                echo "Removed AIVA from Gemini CLI config"
-            fi
-            """
-            
-            // Native write (sandbox-safe): update ~/.gemini/settings.json
-            do {
-                let url = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent(".gemini/settings.json")
-                try FileManager.default.createDirectory(
-                    at: url.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                var root: [String: Any] = [:]
-                if let data = try? Data(contentsOf: url),
-                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    root = obj
-                }
-                var servers = root["mcpServers"] as? [String: Any] ?? [:]
-                if newValue {
-                    servers["aiva"] = [
-                        "command": serverPath,
-                        "args": [],
-                        "trust": true
-                    ]
-                } else {
-                    servers.removeValue(forKey: "aiva")
-                }
-                root["mcpServers"] = servers
-                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
-                try data.write(to: url, options: .atomic)
-            } catch {
-                print("Gemini JSON write failed: \(error)")
-            }
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/echo")
-            process.arguments = [command]
-            do { try process.run(); process.waitUntilExit() } catch {}
-        }
-    }
-    
-    private func performCodexToggleAction(_ newValue: Bool) {
-        let serverPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/aiva-server")
-            .path
-        
-        Task {
-            // Only use native write (idempotent) to avoid duplicate TOML sections
-            // Still make a backup via shell for user safety
-            let command = """
-            CODEX_CONFIG="$HOME/.codex/config.toml"
-            BACKUP_CONFIG="$HOME/.codex/config.toml.backup.$(date +%s)"
-            if [ -f "$CODEX_CONFIG" ]; then
-              cp "$CODEX_CONFIG" "$BACKUP_CONFIG" && echo "Backed up Codex config to: $BACKUP_CONFIG"
-            fi
-            """
-
-            // Native write (sandbox-safe): update ~/.codex/config.toml idempotently
-            do {
-                let url = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent(".codex/config.toml")
-                var text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-                // Always remove any existing [mcp_servers.aiva] block first
-                do {
-                    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-                    var filtered: [Substring] = []
-                    var skipping = false
-                    for line in lines {
-                        let trimmed = line.trimmingCharacters(in: .whitespaces)
-                        if trimmed == "[mcp_servers.aiva]" { skipping = true; continue }
-                        if skipping, trimmed.hasPrefix("[") { skipping = false }
-                        if !skipping { filtered.append(line) }
-                    }
-                    text = filtered.joined(separator: "\n")
-                }
-
-                if newValue {
-                    // Append a single canonical block to avoid duplicates
-                    let block = "\n[mcp_servers.aiva]\ncommand = \"\(serverPath)\"\nargs = []\n"
-                    text.append(block)
-                }
-                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try text.write(to: url, atomically: true, encoding: .utf8)
-            } catch {
-                print("Codex TOML write failed: \(error)")
-            }
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/bash")
-            process.arguments = ["-c", command]
-            
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            
-            do {
-                try process.run()
-                process.waitUntilExit()
-                
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                
-                if process.terminationStatus == 0 {
-                    print("Codex CLI backup successful: \(output)")
-                } else {
-                    print("Failed Codex CLI operation: \(output)")
-                    // Revert the toggle if the operation failed
-                    await MainActor.run {
-                        isInCodex = !newValue
-                    }
-                }
-            } catch {
-                print("Failed to run Codex command: \(error)")
-                // Revert the toggle if the operation failed
-                await MainActor.run {
-                    isInCodex = !newValue
-                }
-            }
-        }
-    }
-    
-    private func performClaudeDesktopToggleAction(_ newValue: Bool) {
-        let serverPath = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS/aiva-server")
-            .path
-        
-        Task {
-            let command = """
-            # Edit Claude Desktop config JSON directly
-            CLAUDE_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-            BACKUP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json.backup.$(date +%s)"
-            
-            # Create directory if it doesn't exist
-            mkdir -p "$(dirname "$CLAUDE_CONFIG")"
-            
-            # Create empty config if it doesn't exist
-            if [ ! -f "$CLAUDE_CONFIG" ]; then
-                echo '{"mcpServers":{}}' > "$CLAUDE_CONFIG"
-            fi
-            
-            # Backup the config
-            cp "$CLAUDE_CONFIG" "$BACKUP_CONFIG"
-            echo "Backed up Claude Desktop config to: $BACKUP_CONFIG"
-            
-            echo "DEBUG: newValue is \(newValue)"
-            if [ "\(newValue)" = "true" ]; then
-                # Add aiva
-                jq --arg serverPath "\(serverPath)" '.mcpServers.aiva = {
-                    "command": $serverPath,
-                    "args": []
-                }' "$CLAUDE_CONFIG" > "$CLAUDE_CONFIG.tmp" && mv "$CLAUDE_CONFIG.tmp" "$CLAUDE_CONFIG"
-                echo "Added AIVA to Claude Desktop config"
-            else
-                # Remove aiva
-                jq 'del(.mcpServers.aiva)' "$CLAUDE_CONFIG" > "$CLAUDE_CONFIG.tmp" && mv "$CLAUDE_CONFIG.tmp" "$CLAUDE_CONFIG"
-                echo "Removed AIVA from Claude Desktop config"
-            fi
-            """
-            
-            // Native write (sandbox-safe): update Claude Desktop config JSON
-            do {
-                let url = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Library/Application Support/Claude/claude_desktop_config.json")
-                try FileManager.default.createDirectory(
-                    at: url.deletingLastPathComponent(),
-                    withIntermediateDirectories: true
-                )
-                var root: [String: Any] = [:]
-                if let data = try? Data(contentsOf: url),
-                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    root = obj
-                }
-                var servers = root["mcpServers"] as? [String: Any] ?? [:]
-                if newValue {
-                    servers["aiva"] = [
-                        "command": serverPath,
-                        "args": []
-                    ]
-                } else {
-                    servers.removeValue(forKey: "aiva")
-                }
-                root["mcpServers"] = servers
-                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
-                try data.write(to: url, options: .atomic)
-            } catch {
-                print("Claude Desktop JSON write failed: \(error)")
-            }
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/bash")
-            process.arguments = ["-c", command]
-            
-            let pipe = Pipe()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            
-            do {
-                try process.run()
-                process.waitUntilExit()
-                
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: data, encoding: .utf8) ?? ""
-                
-                if process.terminationStatus == 0 {
-                    print("Claude Desktop operation successful: \(output)")
-                } else {
-                    print("Failed Claude Desktop operation: \(output)")
-                    // Revert the toggle if the operation failed
-                    await MainActor.run {
-                        isInClaudeDesktop = !newValue
-                    }
-                }
-            } catch {
-                print("Failed to run Claude Desktop command: \\(error)")
-                // Revert the toggle if the operation failed
-                await MainActor.run {
-                    isInClaudeDesktop = !newValue
-                }
-            }
-        }
-    }
-    
-    private func showClaudeCodeCLINotInstalledAlert() {
-        let alert = NSAlert()
-        alert.messageText = "Claude Code CLI Not Found"
-        alert.informativeText = "Claude Code CLI is not installed. Please install it first to use this feature.\n\nYou can install it from: https://github.com/anthropics/claude-code"
-        alert.addButton(withTitle: "OK")
-        alert.alertStyle = .informational
-        alert.runModal()
-    }
-    
-    // MARK: - Launch Actions
-    
-    private func launchClaudeDesktop() {
-        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/Applications/Claude.app"), configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
-    }
-    
-    private func launchClaudeCodeCLI() {
-        openTerminalWithCommand("claude")
-    }
-    
-    private func launchGeminiCLI() {
-        openTerminalWithCommand("gemini")
-    }
-    
-    private func launchCodexCLI() {
-        openTerminalWithCommand("codex")
-    }
-    
-    private func openTerminalWithCommand(_ command: String) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = [
-            "-e", "tell application \"Terminal\"",
-            "-e", "activate", 
-            "-e", "do script \"\(command)\"",
-            "-e", "end tell"
-        ]
-        
-        do {
-            try process.run()
-        } catch {
-            print("Failed to open Terminal: \(error)")
-        }
     }
 }
 
@@ -594,11 +249,50 @@ private struct MenuButton: View {
         .frame(height: 18)
         .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(
-                    isPressed
-                        ? Color.accentColor
-                        : isHighlighted ? Color.accentColor.opacity(0.7) : Color.clear)
+            ZStack {
+                // Base Liquid Glass button effect
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.ultraThinMaterial)
+                    .opacity(isHighlighted || isPressed ? 0.3 : 0)
+                
+                // Pressed/highlighted glass layer
+                if isPressed {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.accentColor.opacity(0.8),
+                                    Color.accentColor.opacity(0.6)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(.white.opacity(0.3), lineWidth: 0.5)
+                        )
+                } else if isHighlighted {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.accentColor.opacity(0.4),
+                                    Color.accentColor.opacity(0.2)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(.white.opacity(0.2), lineWidth: 0.5)
+                        )
+                        .blur(radius: 0.5)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: isHighlighted)
+            .animation(.easeInOut(duration: 0.1), value: isPressed)
         )
         .onHover { state in
             guard isEnabled else { return }

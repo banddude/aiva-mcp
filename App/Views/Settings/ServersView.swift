@@ -10,46 +10,141 @@ struct ServersView: View {
     @State private var newServerType: ServerType = .sse
     @State private var newServerCommand: String = ""
     @State private var newServerArguments: String = ""
+    @State private var showingAddForm: Bool = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Header
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.blue.opacity(0.15))
-                        Image(systemName: "server.rack")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.blue)
-                    }
-                    .frame(width: 32, height: 32)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header matching AgentsView style
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("Servers")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Spacer()
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Add MCP-compatible servers by name and URL.")
+                    
+                    Text("Connect to external MCP servers or run local MCP tools")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Button("Add New Server") {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showingAddForm.toggle()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.bottom, 20)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    
+                    // Add server form dropdown
+                    if showingAddForm {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("Add New Server")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                
+                                Spacer()
+                                
+                                Button("Cancel") {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        showingAddForm = false
+                                        clearForm()
+                                    }
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundColor(.secondary)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Type")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    Picker("Server Type", selection: $newServerType) {
+                                        ForEach(ServerType.allCases, id: \.self) { type in
+                                            Text(type.rawValue).tag(type)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .labelsHidden()
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Name")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                    TextField("My Server", text: $newServerName)
+                                        .textFieldStyle(.roundedBorder)
+                                }
+                                
+                                if newServerType == .sse {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("URL")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                        TextField("https://example.com/mcp", text: $newServerURL)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(.body, design: .monospaced))
+                                    }
+                                } else {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Command")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                        TextField("npx", text: $newServerCommand)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(.body, design: .monospaced))
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Arguments")
+                                            .font(.subheadline)
+                                            .fontWeight(.medium)
+                                        TextField("@playwright/mcp@latest", text: $newServerArguments)
+                                            .textFieldStyle(.roundedBorder)
+                                            .font(.system(.body, design: .monospaced))
+                                    }
+                                }
+                                
+                                HStack {
+                                    Button {
+                                        addServer()
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            showingAddForm = false
+                                        }
+                                    } label: {
+                                        Label("Add Server", systemImage: "plus")
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(isAddButtonDisabled())
+                                    
+                                    Spacer()
+                                }
+                                .padding(.top, 8)
+                            }
+                        }
+                        .padding(16)
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .top)),
+                            removal: .opacity.combined(with: .move(edge: .top))
+                        ))
+                    }
 
                     // Existing servers list
-                    if servers.isEmpty {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("No servers added yet")
-                                .font(.headline)
-                            Text("Use the form below to add your first server.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 6)
-                    } else {
-                        VStack(spacing: 12) {
+                    if !servers.isEmpty {
+                        VStack(spacing: 8) {
                             ForEach(Array(servers.enumerated()), id: \.element.id) { index, _ in
                                 ServerRowView(
                                     server: $servers[index],
@@ -73,71 +168,13 @@ struct ServersView: View {
                         }
                     }
 
-                    Divider().padding(.vertical, 4)
-
-                    // Add server form
-                    Grid(alignment: .topLeading, horizontalSpacing: 12, verticalSpacing: 8) {
-                        GridRow {
-                            Text("Type").frame(width: 60, alignment: .trailing)
-                            Picker("Server Type", selection: $newServerType) {
-                                ForEach(ServerType.allCases, id: \.self) { type in
-                                    Text(type.rawValue).tag(type)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labelsHidden()
-                        }
-                        GridRow {
-                            Text("Name").frame(width: 60, alignment: .trailing)
-                            TextField("My Server", text: $newServerName)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        if newServerType == .sse {
-                            GridRow {
-                                Text("URL").frame(width: 60, alignment: .trailing)
-                                TextField("https://example.com/mcp", text: $newServerURL)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .monospaced))
-                            }
-                        } else {
-                            GridRow {
-                                Text("Command").frame(width: 60, alignment: .trailing)
-                                TextField("npx", text: $newServerCommand)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .monospaced))
-                            }
-                            GridRow {
-                                Text("Arguments").frame(width: 60, alignment: .trailing)
-                                TextField("@playwright/mcp@latest", text: $newServerArguments)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .monospaced))
-                            }
-                        }
-                        
-                        GridRow {
-                            Text("")
-                            HStack {
-                                Button {
-                                    addServer()
-                                } label: {
-                                    Label("Add Server", systemImage: "plus")
-                                }
-                                .disabled(isAddButtonDisabled())
-                                Spacer()
-                            }
-                        }
-                    }
+                    
+                    Spacer()
                 }
-                .padding(16)
-                .background(Color(NSColor.controlBackgroundColor))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(NSColor.separatorColor), lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
             }
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear(perform: load)
         .onChange(of: servers) { _, _ in save() }
     }
@@ -183,13 +220,16 @@ struct ServersView: View {
             servers.append(ServerEntry(name: name, command: command, arguments: args))
         }
         
-        // Clear form
+        clearForm()
+        save()
+        NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
+    }
+    
+    private func clearForm() {
         newServerName = ""
         newServerURL = ""
         newServerCommand = ""
         newServerArguments = ""
-        save()
-        NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
     }
 
     private struct ServerRowView: View {
@@ -197,12 +237,10 @@ struct ServersView: View {
         var didChange: () -> Void
         var onDelete: () -> Void
         let controller: ServerController
-        @State private var isFetching = false
-        @State private var status: String = ""
 
         var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     ZStack {
                         Circle()
                             .fill((server.type == .sse ? Color.accentColor : Color.yellow).opacity(0.15))
@@ -211,89 +249,66 @@ struct ServersView: View {
                             .foregroundStyle(server.type == .sse ? Color.accentColor : Color.yellow)
                     }
                     .frame(width: 26, height: 26)
-                    Text(server.type.rawValue)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("Name", text: $server.name)
-                        .textFieldStyle(.roundedBorder)
-                    Spacer()
+                    .padding(.top, 6) // Align with text field center
                     
-                    if server.type == .sse {
-                        Button {
-                            Task {
-                                isFetching = true
-                                status = "Fetching..."
-                                print("[Servers] Fetch Tools tapped for \(server.url ?? "")")
-                                
-                                // Trigger services rebuild first
-                                NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
-                                
-                                // Give the ServerController time to rebuild services
-                                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                                
-                                // Find and refresh the actual service from the registry
-                                let configs = controller.computedServiceConfigs
-                                if let config = configs.first(where: { 
-                                    $0.id == "RemoteServerService_\(server.id.uuidString)" 
-                                }) {
-                                    if let remoteService = config.service as? RemoteServerService {
-                                        do {
-                                            let tools = try await remoteService.refreshTools()
-                                            status = "Fetched \(tools.count) tools"
-                                            print("[Servers] \(server.name): fetched \(tools.count) tools")
-                                            NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
-                                        } catch {
-                                            status = "Error: \(error.localizedDescription)"
-                                            print("[Servers] \(server.name) fetch error: \(error)")
-                                        }
-                                    } else {
-                                        status = "Service type mismatch"
-                                    }
-                                } else {
-                                    status = "Service not found in registry"
-                                    print("[Servers] Could not find remote service in registry for: \(server.name)")
-                                }
-                                isFetching = false
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            TextField("Name", text: $server.name)
+                                .textFieldStyle(.roundedBorder)
+                            
+                            Button(role: .destructive) {
+                                onDelete()
+                            } label: {
+                                Image(systemName: "trash")
                             }
-                        } label: {
-                            if isFetching { 
-                                ProgressView().controlSize(.small) 
-                            } else { 
-                                Label("Fetch Tools", systemImage: "arrow.clockwise") 
-                            }
+                            .buttonStyle(.borderless)
                         }
-                        .buttonStyle(.bordered)
+                        Text(server.type.rawValue)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                    
-                    Button(role: .destructive) {
-                        onDelete()
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                    .buttonStyle(.borderless)
                 }
                 
                 if server.type == .sse {
-                    TextField("https://example.com/mcp", text: Binding(
-                        get: { server.url ?? "" },
-                        set: { server.url = $0 }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                    
-                    Grid(alignment: .topLeading, horizontalSpacing: 8, verticalSpacing: 8) {
-                        GridRow {
-                            Text("Header Key").frame(width: 90, alignment: .trailing)
-                            TextField("Authorization or X-API-Key", text: Binding(get: { server.headerKey ?? "" }, set: { server.headerKey = $0 }))
-                                .textFieldStyle(.roundedBorder)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text("URL:").font(.caption).foregroundStyle(.secondary)
+                            Text(server.url ?? "")
+                                .font(.system(.caption, design: .monospaced))
+                                .lineLimit(1)
                         }
-                        GridRow {
-                            Text("Header Value").frame(width: 90, alignment: .trailing)
-                            SecureField("Bearer …", text: Binding(get: { server.headerValue ?? "" }, set: { server.headerValue = $0 }))
-                                .textFieldStyle(.roundedBorder)
+                        
+                        // Show tool count for SSE servers
+                        HStack(spacing: 4) {
+                            if let config = controller.computedServiceConfigs.first(where: {
+                                $0.id == "RemoteServerService_\(server.id.uuidString)"
+                            }) {
+                                let toolCount = config.service.tools.count
+                                if toolCount > 0 {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                        .font(.caption)
+                                    Text("\(toolCount) tools available")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Image(systemName: "clock")
+                                        .foregroundStyle(.orange)
+                                        .font(.caption)
+                                    Text("Connecting...")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else {
+                                Image(systemName: "clock")
+                                    .foregroundStyle(.orange)
+                                    .font(.caption)
+                                Text("Loading...")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
-                    .padding(.top, 2)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
@@ -336,16 +351,14 @@ struct ServersView: View {
                         }
                     }
                 }
-
-                if !status.isEmpty && server.type == .sse {
-                    Text(status).font(.caption).foregroundStyle(.secondary)
-                }
             }
-            .padding(10)
-            .background(Color(NSColor.controlBackgroundColor))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(NSColor.separatorColor), lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .background(Color.clear)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+            )
             .onChange(of: server) { _, _ in didChange() }
         }
     }

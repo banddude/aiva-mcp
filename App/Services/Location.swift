@@ -1,5 +1,6 @@
 @preconcurrency import CoreLocation
 import Foundation
+import MapKit
 import OSLog
 import Ontology
 
@@ -203,16 +204,18 @@ private let log = Logger.service("location")
 
             return try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Value, Error>) in
-                let geocoder = CLGeocoder()
-
-                geocoder.geocodeAddressString(address) { placemarks, error in
+                let geocoder = MKLocalSearch.Request()
+                geocoder.naturalLanguageQuery = address
+                
+                let search = MKLocalSearch(request: geocoder)
+                search.start { response, error in
                     if let error = error {
                         continuation.resume(throwing: error)
                         return
                     }
 
-                    guard let placemark = placemarks?.first, let location = placemark.location
-                    else {
+                    guard let mapItem = response?.mapItems.first, 
+                          let location = mapItem.placemark.location else {
                         continuation.resume(
                             throwing: NSError(
                                 domain: "LocationServiceError", code: 4,
@@ -223,6 +226,7 @@ private let log = Logger.service("location")
                         return
                     }
 
+                    let placemark = mapItem.placemark
                     var result: [String: Value] = [
                         "@context": .string("https://schema.org"),
                         "@type": .string("Place"),
@@ -299,16 +303,21 @@ private let log = Logger.service("location")
 
             return try await withCheckedThrowingContinuation {
                 (continuation: CheckedContinuation<Value, Error>) in
-                let location = CLLocation(latitude: latitude, longitude: longitude)
-                let geocoder = CLGeocoder()
-
-                geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                let geocoder = MKLocalSearch.Request()
+                geocoder.region = MKCoordinateRegion(
+                    center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                    latitudinalMeters: 1000,
+                    longitudinalMeters: 1000
+                )
+                
+                let search = MKLocalSearch(request: geocoder)
+                search.start { response, error in
                     if let error = error {
                         continuation.resume(throwing: error)
                         return
                     }
 
-                    guard let placemark = placemarks?.first else {
+                    guard let mapItem = response?.mapItems.first else {
                         continuation.resume(
                             throwing: NSError(
                                 domain: "LocationServiceError", code: 6,
@@ -319,6 +328,7 @@ private let log = Logger.service("location")
                         return
                     }
 
+                    let placemark = mapItem.placemark
                     var result: [String: Value] = [
                         "@context": .string("https://schema.org"),
                         "@type": .string("Place"),

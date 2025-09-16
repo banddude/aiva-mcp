@@ -21,7 +21,7 @@ class SettingsWindowController: NSWindowController {
             defer: false
         )
         window.center()
-        window.title = "Settings"
+        window.title = "AIVA - Settings"
         window.contentView = NSHostingView(rootView: SettingsView(serverController: serverController))
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 720, height: 300)
@@ -48,23 +48,23 @@ class SettingsWindowController: NSWindowController {
 
 struct SettingsView: View {
     @ObservedObject var serverController: ServerController
-    @State private var selectedSection: SettingsSection? = .clients
+    @State private var selectedSection: SettingsSection? = .agents
 
     enum SettingsSection: String, CaseIterable, Identifiable {
-        case clients = "Clients"
+        case agents = "Agents"
         case servers = "Servers"
-        case memory = "Memory"
         case tools = "Tools"
+        case memory = "Memory"
         case logs = "Logs"
 
         var id: String { self.rawValue }
 
         var icon: String {
             switch self {
-            case .clients: return "person.2"
+            case .agents: return "cpu"
             case .servers: return "server.rack"
-            case .memory: return "brain"
             case .tools: return "hammer"
+            case .memory: return "brain"
             case .logs: return "text.and.command.macwindow"
             }
         }
@@ -90,22 +90,17 @@ struct SettingsView: View {
 
             if let selectedSection {
                 switch selectedSection {
-                case .clients:
-                    ClientsView(serverController: serverController)
-                        .navigationTitle("Clients")
+                case .agents:
+                    AgentsView(serverController: serverController, isEnabled: .constant(true))
                 case .servers:
                     ServersView(controller: serverController)
-                        .navigationTitle("Servers")
-                case .memory:
-                    MemoryView()
-                        .navigationTitle("Memory")
-                        .formStyle(.grouped)
                 case .tools:
                     ToolsView(serviceConfigs: serverController.computedServiceConfigs)
-                        .navigationTitle("Tools")
+                case .memory:
+                    MemoryView()
+                        .formStyle(.grouped)
                 case .logs:
                     LogsView()
-                        .navigationTitle("Logs")
                 }
             } else {
                 Text("Select a category")

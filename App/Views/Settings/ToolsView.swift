@@ -4,39 +4,113 @@ import JSONSchema
 struct ToolsView: View {
     let serviceConfigs: [ServiceConfig]
     @State private var query: String = ""
-    @State private var expandedServices: Set<String> = []
     @State private var refreshID = UUID()
+    @State private var sortDisabledToEnd = false
 
     init(serviceConfigs: [ServiceConfig]) {
         self.serviceConfigs = serviceConfigs
-        // Default to expanded for visibility
-        _expandedServices = State(initialValue: Set(serviceConfigs.map { $0.id }))
+    }
+    
+    // Data structure for tools with their service info
+    private struct ToolWithService: Identifiable {
+        let tool: Tool
+        let serviceId: String
+        let serviceName: String
+        let serviceIconName: String
+        let serviceColor: Color
+        
+        var id: String {
+            "\(serviceId).\(tool.name)"
+        }
+    }
+    
+    // All tools flattened into a single array
+    private var allFilteredTools: [ToolWithService] {
+        var result: [ToolWithService] = []
+        
+        for config in serviceConfigs {
+            let tools = config.service.tools
+            let filteredTools: [Tool]
+            
+            if query.isEmpty {
+                filteredTools = tools
+            } else {
+                let q = query.lowercased()
+                filteredTools = tools.filter { tool in
+                    tool.name.lowercased().contains(q) ||
+                    tool.description.lowercased().contains(q) ||
+                    (tool.annotations.title?.lowercased().contains(q) ?? false)
+                }
+            }
+            
+            for tool in filteredTools {
+                result.append(ToolWithService(
+                    tool: tool,
+                    serviceId: config.id,
+                    serviceName: config.name,
+                    serviceIconName: config.iconName,
+                    serviceColor: config.color
+                ))
+            }
+        }
+        
+        // Sort by enabled status if requested (preserve original order within groups)
+        if sortDisabledToEnd {
+            var enabledTools: [ToolWithService] = []
+            var disabledTools: [ToolWithService] = []
+            
+            for tool in result {
+                let key = "toolEnabled.\(tool.serviceId).\(tool.tool.name)"
+                let enabled = UserDefaults.standard.object(forKey: key) == nil ? true : UserDefaults.standard.bool(forKey: key)
+                
+                if enabled {
+                    enabledTools.append(tool)
+                } else {
+                    disabledTools.append(tool)
+                }
+            }
+            
+            result = enabledTools + disabledTools
+        }
+        
+        return result
     }
 
     private var gridColumns: [GridItem] {
-        // Five columns for compact tool cards
-        Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .topLeading), count: 5)
+        // Adaptive grid that fits the current width with square tiles
+        [GridItem(.adaptive(minimum: 120), spacing: 12)]
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header to match Clients/Memory
-            HStack(alignment: .center, spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                    Image(systemName: "hammer")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.blue)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header matching other settings views
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Tools")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text("All available tools from connected services")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
-                .frame(width: 32, height: 32)
-                Text("Tools")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                
                 Spacer()
+                
+                Button {
+                    sortDisabledToEnd.toggle()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: sortDisabledToEnd ? "line.3.horizontal.decrease" : "line.3.horizontal")
+                            .font(.caption)
+                        Text(sortDisabledToEnd ? "Disabled Last" : "Sort Disabled")
+                            .font(.caption)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.bottom, 20)
 
             // Search
             HStack {
@@ -45,63 +119,29 @@ struct ToolsView: View {
                 TextField("Search tools", text: $query)
                     .textFieldStyle(.plain)
             }
-            .padding(8)
+            .padding(2)
             .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(8)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 8)
+            .cornerRadius(6)
+            .padding(.bottom, 12)
 
             ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(serviceConfigs, id: \.id) { config in
-                        let tools = filteredTools(for: config)
-                        if !tools.isEmpty {
-                            DisclosureGroup(
-                                isExpanded: Binding(
-                                    get: { expandedServices.contains(config.id) || !query.isEmpty },
-                                    set: { isOpen in
-                                        if isOpen { expandedServices.insert(config.id) }
-                                        else { expandedServices.remove(config.id) }
-                                    }
-                                )
-                            ) {
-                                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 12) {
-                                    ForEach(tools, id: \.name) { tool in
-                                        ToolRow(
-                                            tool: tool,
-                                            isOn: toolToggle(serviceId: config.id, toolName: tool.name),
-                                            serviceIconName: config.iconName,
-                                            serviceColor: config.color
-                                        )
-                                    }
-                                }
-                                .padding(.vertical, 8)
-                            } label: {
-                                SectionHeaderLabel(
-                                    iconName: config.iconName,
-                                    color: config.color,
-                                    name: config.name
-                                )
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation {
-                                        if expandedServices.contains(config.id) {
-                                            expandedServices.remove(config.id)
-                                        } else {
-                                            expandedServices.insert(config.id)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, 12)
-                        }
+                LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 12) {
+                    ForEach(allFilteredTools, id: \.id) { toolWithService in
+                        SquareToolCard(
+                            tool: toolWithService.tool,
+                            isOn: toolToggle(serviceId: toolWithService.serviceId, toolName: toolWithService.tool.name),
+                            serviceIconName: toolWithService.serviceIconName,
+                            serviceColor: toolWithService.serviceColor,
+                            serviceName: toolWithService.serviceName
+                        )
                     }
                 }
-                .animation(.default, value: expandedServices)
-                .animation(.default, value: query)
+                .animation(.easeInOut(duration: 0.4), value: sortDisabledToEnd)
+                .padding(.bottom, 24)
             }
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .id(refreshID)
         .onReceive(NotificationCenter.default.publisher(for: .aivaToolTogglesChanged)) { _ in
             // Force refresh when tools change
@@ -109,39 +149,7 @@ struct ToolsView: View {
         }
     }
 
-    private struct SectionHeaderLabel: View {
-        let iconName: String
-        let color: Color
-        let name: String
-        @State private var hovering = false
-
-        var body: some View {
-            HStack(spacing: 8) {
-                Image(systemName: iconName)
-                    .foregroundColor(color)
-                Text(name)
-                    .font(.headline)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(hovering ? Color(NSColor.selectedControlColor).opacity(0.08) : .clear)
-            )
-            .onHover { hovering = $0 }
-        }
-    }
-
-    private func filteredTools(for config: ServiceConfig) -> [Tool] {
-        let tools = config.service.tools
-        guard !query.isEmpty else { return tools }
-        let q = query.lowercased()
-        return tools.filter { tool in
-            tool.name.lowercased().contains(q) ||
-            tool.description.lowercased().contains(q) ||
-            (tool.annotations.title?.lowercased().contains(q) ?? false)
-        }
-    }
+    
     private func toolToggle(serviceId: String, toolName: String) -> Binding<Bool> {
         let key = "toolEnabled.\(serviceId).\(toolName)"
         return Binding<Bool>(
@@ -157,12 +165,13 @@ struct ToolsView: View {
     }
 }
 
-private struct ToolRow: View {
+private struct SquareToolCard: View {
     let tool: Tool
     @Binding var isOn: Bool
     @State private var isExpanded: Bool = false
     let serviceIconName: String
     let serviceColor: Color
+    let serviceName: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -184,39 +193,69 @@ private struct ToolRow: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
             }
+            
+            // Service name
+            Text(serviceName)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
 
-            // Name below, clickable to expand (3-line fixed area)
+            // Tool name, clickable to expand (fixed height area)
             Button(action: { isExpanded.toggle() }) {
-                Text(tool.annotations.title ?? tool.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(3)
-                    .frame(height: 42, alignment: .topLeading) // ~3 lines @12pt
-                    .foregroundColor(.primary)
-                    .contentShape(Rectangle())
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(cleanToolName(tool))
+                            .font(.system(size: 12, weight: .semibold))
+                            .multilineTextAlignment(.leading)
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        
+                        if isExpanded {
+                            if !tool.description.isEmpty {
+                                Text(tool.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            Text(inputSummary(tool.inputSchema))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            if isExpanded {
-                if !tool.description.isEmpty {
-                    Text(tool.description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text(inputSummary(tool.inputSchema))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            .frame(height: 60) // Fixed height for content area
         }
-        .padding(10)
+        .padding(12)
+        .frame(width: 120, height: 120) // Fixed square size
+        .clipped()
         .background(Color(NSColor.controlBackgroundColor))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func cleanToolName(_ tool: Tool) -> String {
+        // If there's a proper title annotation, use it
+        if let title = tool.annotations.title, !title.isEmpty {
+            return title
+        }
+        
+        // Otherwise, clean up the snake_case name
+        return tool.name
+            .replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ")
+            .map { word in
+                word.prefix(1).uppercased() + word.dropFirst().lowercased()
+            }
+            .joined(separator: " ")
     }
 
     private func prettySchema(_ schema: JSONSchema) -> String {

@@ -15,6 +15,7 @@ struct ConnectionApprovalView: View {
                 Text("Allow \"\(clientName)\" to connect to AIVA?")
                     .font(.title3)
                     .fontWeight(.semibold)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(alignment: .center, spacing: 12) {
                     Image(nsImage: NSApp.applicationIconImage)
@@ -45,7 +46,7 @@ struct ConnectionApprovalView: View {
             .padding(.top, 8)
         }
         .padding(20)
-        .frame(width: 360, height: 175)
+        .frame(minWidth: 360, idealWidth: 450, maxWidth: 600)
         .background(Color(NSColor.windowBackgroundColor))
         .cornerRadius(12)
         .shadow(radius: 10)
@@ -95,10 +96,13 @@ class ConnectionApprovalWindowController: NSObject {
 
         // Create the hosting controller
         let hostingController = NSHostingController(rootView: approvalView)
+        
+        // Calculate the intrinsic content size
+        let contentSize = hostingController.sizeThatFits(in: CGSize(width: 600, height: 500))
 
-        // Create the window with fixed size matching the SwiftUI view
+        // Create the window with dynamic size based on content
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 175),
+            contentRect: NSRect(x: 0, y: 0, width: max(360, contentSize.width), height: max(175, contentSize.height)),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -146,8 +150,7 @@ class ConnectionApprovalWindowController: NSObject {
 #Preview {
     ConnectionApprovalView(
         clientName: "Claude Desktop",
-        onApprove: { alwaysTrust in print("Approved: \\(alwaysTrust)") },
+        onApprove: { alwaysTrust in print("Approved: \(alwaysTrust)") },
         onDeny: { print("Denied") }
     )
-    .frame(width: 360, height: 175)
 }
