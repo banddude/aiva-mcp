@@ -8,13 +8,17 @@
 	<true/>
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.device.camera</key>
+	<true/>
 	<key>com.apple.security.inherit</key>
 	<true/>
-	<key>com.apple.security.personal-information.addressbook.notes</key>
+	<key>com.apple.security.personal-information.addressbook</key>
 	<true/>
-	<key>com.apple.security.personal-information.health</key>
+	<key>com.apple.security.personal-information.calendars</key>
 	<true/>
-	<key>com.apple.security.personal-information.reminders</key>
+	<key>com.apple.security.personal-information.location</key>
 	<true/>
 	<key>com.apple.security.temporary-exception.apple-events</key>
 	<array>
