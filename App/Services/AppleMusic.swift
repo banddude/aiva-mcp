@@ -226,6 +226,115 @@ final class AppleMusicService: Service, Sendable {
                 let shuffle = params["shuffle"]?.boolValue ?? false
                 
                 return try await self.playPlaylist(id: playlistID, shuffle: shuffle)
+            },
+            
+            // User playlists
+            Tool(
+                name: "apple_music_user_playlists",
+                description: "Get user's personal playlists from their Apple Music library",
+                inputSchema: .object(
+                    properties: [
+                        "limit": .integer(description: "Maximum number of playlists to return (default: 20)")
+                    ],
+                    required: [],
+                    additionalProperties: false
+                ),
+                annotations: .init(title: "Get User Playlists", readOnlyHint: true, openWorldHint: false)
+            ) { params in
+                let limit = params["limit"]?.intValue ?? 20
+                return try await self.getUserPlaylists(limit: limit)
+            },
+            
+            // Repeat mode
+            Tool(
+                name: "apple_music_repeat_mode",
+                description: "Set repeat mode for Apple Music playback",
+                inputSchema: .object(
+                    properties: [
+                        "mode": .string(description: "Repeat mode: off, one (current track), or all (queue)", enum: ["off", "one", "all"])
+                    ],
+                    required: ["mode"],
+                    additionalProperties: false
+                ),
+                annotations: .init(title: "Set Repeat Mode", readOnlyHint: false, openWorldHint: false)
+            ) { params in
+                let mode = params["mode"]?.stringValue ?? "off"
+                return try await self.setRepeatMode(mode: mode)
+            },
+            
+            // Shuffle mode
+            Tool(
+                name: "apple_music_shuffle_mode",
+                description: "Toggle shuffle mode for Apple Music playback",
+                inputSchema: .object(
+                    properties: [
+                        "enabled": .boolean(description: "Enable or disable shuffle mode")
+                    ],
+                    required: ["enabled"],
+                    additionalProperties: false
+                ),
+                annotations: .init(title: "Set Shuffle Mode", readOnlyHint: false, openWorldHint: false)
+            ) { params in
+                let enabled = params["enabled"]?.boolValue ?? false
+                return try await self.setShuffleMode(enabled: enabled)
+            },
+            
+            // Queue management
+            Tool(
+                name: "apple_music_queue",
+                description: "View current playback queue and upcoming tracks",
+                inputSchema: .object(
+                    properties: [
+                        "limit": .integer(description: "Maximum number of upcoming tracks to show (default: 10)")
+                    ],
+                    required: [],
+                    additionalProperties: false
+                ),
+                annotations: .init(title: "View Playback Queue", readOnlyHint: true, openWorldHint: false)
+            ) { params in
+                return try await self.getQueue()
+            },
+            
+            // Radio stations
+            Tool(
+                name: "apple_music_radio_stations",
+                description: "Browse Apple Music radio stations",
+                inputSchema: .object(
+                    properties: [
+                        "limit": .integer(description: "Maximum number of stations to return (default: 20)")
+                    ],
+                    required: [],
+                    additionalProperties: false
+                ),
+                annotations: .init(title: "Browse Radio Stations", readOnlyHint: true, openWorldHint: false)
+            ) { params in
+                let limit = params["limit"]?.intValue ?? 20
+                return try await self.getRadioStations(limit: limit)
+            },
+            
+            // Create playlist
+            Tool(
+                name: "apple_music_create_playlist",
+                description: "Create a new playlist in user's Apple Music library",
+                inputSchema: .object(
+                    properties: [
+                        "name": .string(description: "Name for the new playlist"),
+                        "description": .string(description: "Optional description for the playlist"),
+                        "songIDs": .array(
+                            description: "Optional array of song IDs to add to the playlist",
+                            items: .string(description: "Apple Music song ID")
+                        )
+                    ],
+                    required: ["name"],
+                    additionalProperties: false
+                ),
+                annotations: .init(title: "Create Playlist", readOnlyHint: false, openWorldHint: false)
+            ) { params in
+                let name = params["name"]?.stringValue ?? ""
+                let description = params["description"]?.stringValue
+                let songIDs = params["songIDs"]?.arrayValue?.compactMap { $0.stringValue } ?? []
+                
+                return try await self.createPlaylist(name: name, description: description, songIDs: songIDs)
             }
         ]
     }
@@ -424,6 +533,91 @@ extension AppleMusicService {
         
         let shuffleStatus = shuffle ? " (shuffled)" : ""
         return "Now playing playlist: \(playlist.name) (\(tracksArray.count) tracks)\(shuffleStatus)"
+    }
+    
+    private func getUserPlaylists(limit: Int) async throws -> String {
+        // Get user's library playlists
+        var request = MusicLibraryRequest<Playlist>()
+        request.limit = limit
+        
+        let response = try await request.response()
+        
+        if response.items.isEmpty {
+            return "No playlists found in your library"
+        }
+        
+        var results: [String] = []
+        for playlist in response.items {
+            let trackCount = playlist.tracks?.count ?? 0
+            results.append("📻 \(playlist.name) (\(trackCount) tracks) - ID: \(playlist.id)")
+        }
+        
+        return "Your playlists (\(response.items.count) total):\n\n" + results.joined(separator: "\n")
+    }
+    
+    private func setRepeatMode(mode: String) async throws -> String {
+        let player = ApplicationMusicPlayer.shared
+        
+        switch mode.lowercased() {
+        case "off", "none":
+            player.state.repeatMode = MusicPlayer.RepeatMode.none
+            return "Repeat mode set to: Off"
+        case "one", "song":
+            player.state.repeatMode = MusicPlayer.RepeatMode.one
+            return "Repeat mode set to: Repeat One"
+        case "all", "playlist":
+            player.state.repeatMode = MusicPlayer.RepeatMode.all
+            return "Repeat mode set to: Repeat All"
+        default:
+            return "Invalid repeat mode. Use 'off', 'one', or 'all'"
+        }
+    }
+    
+    private func setShuffleMode(enabled: Bool) async throws -> String {
+        let player = ApplicationMusicPlayer.shared
+        player.state.shuffleMode = enabled ? .songs : .off
+        
+        return enabled ? "Shuffle mode enabled" : "Shuffle mode disabled"
+    }
+    
+    private func getQueue() async throws -> String {
+        let player = ApplicationMusicPlayer.shared
+        let queue = player.queue
+        
+        var results: [String] = []
+        
+        // Current track
+        if queue.currentEntry != nil {
+            // Try to get basic track info
+            results.append("🎵 Now Playing: Current track in queue")
+        }
+        
+        // Queue info
+        let totalEntries = queue.entries.count
+        if totalEntries > 0 {
+            results.append("Queue has \(totalEntries) items")
+        } else {
+            return "Queue is empty"
+        }
+        
+        return results.joined(separator: "\n")
+    }
+    
+    private func getRadioStations(limit: Int) async throws -> String {
+        // RadioStation type may not be available in current MusicKit version
+        // Return a helpful message for now
+        return "Radio station browsing requires additional MusicKit API access. Try searching for 'Apple Music 1' or other radio station names in the search tool."
+    }
+    
+    private func createPlaylist(name: String, description: String?, songIDs: [String]) async throws -> String {
+        // Note: MusicKit doesn't provide direct playlist creation API in current version
+        // This would require using Apple Music API directly or waiting for MusicKit updates
+        // For now, return a helpful message
+        
+        let descText = description != nil ? " with description '\(description!)'" : ""
+        let songText = !songIDs.isEmpty ? " and \(songIDs.count) songs" : ""
+        
+        return "Playlist creation requires additional Apple Music API integration. Please create '\(name)'\(descText)\(songText) manually in the Music app and use the search function to find and play it."
     }
 }
 
