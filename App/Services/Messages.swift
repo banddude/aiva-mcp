@@ -50,113 +50,302 @@ final class MessageService: NSObject, Service, NSOpenSavePanelDelegate, Sendable
     }
 
     nonisolated var tools: [Tool] {
-        Tool(
-            name: "messages_fetch",
-            description: "Fetch messages from the Messages app",
-            inputSchema: .object(
-                properties: [
-                    "participants": .array(
-                        description:
-                            "Participant handles (phone or email). Phone numbers should use E.164 format",
-                        items: .string()
-                    ),
-                    "start": .string(
-                        description: "Start of the date range (inclusive)",
-                        format: .dateTime
-                    ),
-                    "end": .string(
-                        description: "End of the date range (exclusive)",
-                        format: .dateTime
-                    ),
-                    "query": .string(
-                        description: "Search term to filter messages by content"
-                    ),
-                    "limit": .integer(
-                        description: "Maximum messages to return",
-                        default: .int(defaultLimit)
-                    ),
-                ],
-                additionalProperties: false
-            ),
-            annotations: .init(
-                title: "Fetch Messages",
-                readOnlyHint: true,
-                openWorldHint: false
-            )
-        ) { @MainActor arguments in
-            log.debug("Starting message fetch with arguments: \(arguments)")
-            try await self.activate()
-
-            let participants =
-                arguments["participants"]?.arrayValue?.compactMap({
-                    $0.stringValue
-                }) ?? []
-
-            var dateRange: Range<Date>?
-            if let startDateStr = arguments["start"]?.stringValue,
-                let endDateStr = arguments["end"]?.stringValue,
-                let startDate = ISO8601DateFormatter.parseFlexibleISODate(startDateStr),
-                let endDate = ISO8601DateFormatter.parseFlexibleISODate(endDateStr)
-            {
-                dateRange = startDate..<endDate
-            }
-
-            let searchTerm = arguments["query"]?.stringValue
-            let limit = arguments["limit"]?.intValue
-
-            let db = try self.createDatabaseConnection()
-            var messages: [[String: Value]] = []
-
-            log.debug("Fetching handles for participants: \(participants)")
-            let handles = try db.fetchParticipant(matching: participants)
-
-            log.debug(
-                "Fetching messages with date range: \(String(describing: dateRange)), limit: \(limit ?? -1)"
-            )
-            for message in try db.fetchMessages(
-                with: Set(handles),
-                in: dateRange,
-                limit: max(limit ?? defaultLimit, 1024)
-            ) {
-                guard messages.count < (limit ?? defaultLimit) else { break }
-                guard !message.text.isEmpty else { continue }
-
-                let sender: String
-                if message.isFromMe {
-                    sender = "me"
-                } else if message.sender == nil {
-                    sender = "unknown"
-                } else {
-                    sender = message.sender!.rawValue
-                }
-
-                if let searchTerm {
-                    guard message.text.localizedCaseInsensitiveContains(searchTerm) else {
-                        continue
-                    }
-                }
-
-                messages.append([
-                    "@id": .string(message.id.description),
-                    "sender": [
-                        "@id": .string(sender)
+        [
+            Tool(
+                name: "messages_fetch",
+                description: "Fetch messages from the Messages app",
+                inputSchema: .object(
+                    properties: [
+                        "participants": .array(
+                            description:
+                                "Participant handles (phone or email). Phone numbers should use E.164 format",
+                            items: .string()
+                        ),
+                        "start": .string(
+                            description: "Start of the date range (inclusive)",
+                            format: .dateTime
+                        ),
+                        "end": .string(
+                            description: "End of the date range (exclusive)",
+                            format: .dateTime
+                        ),
+                        "query": .string(
+                            description: "Search term to filter messages by content"
+                        ),
+                        "limit": .integer(
+                            description: "Maximum messages to return",
+                            default: .int(defaultLimit)
+                        ),
                     ],
-                    "text": .string(message.text),
-                    "createdAt": .string(message.date.formatted(.iso8601)),
-                ])
-            }
+                    additionalProperties: false
+                ),
+                annotations: .init(
+                    title: "Fetch Messages",
+                    readOnlyHint: true,
+                    openWorldHint: false
+                )
+            ) { @MainActor arguments in
+                log.debug("Starting message fetch with arguments: \(arguments)")
+                try await self.activate()
 
-            log.debug("Successfully fetched \(messages.count) messages")
-            return [
-                "@context": "https://schema.org",
-                "@type": "Conversation",
-                "hasPart": Value.array(messages.map({ .object($0) })),
-            ]
-        }
+                let participants =
+                    arguments["participants"]?.arrayValue?.compactMap({
+                        $0.stringValue
+                    }) ?? []
+
+                var dateRange: Range<Date>?
+                if let startDateStr = arguments["start"]?.stringValue,
+                    let endDateStr = arguments["end"]?.stringValue,
+                    let startDate = ISO8601DateFormatter.parseFlexibleISODate(startDateStr),
+                    let endDate = ISO8601DateFormatter.parseFlexibleISODate(endDateStr)
+                {
+                    dateRange = startDate..<endDate
+                }
+
+                let searchTerm = arguments["query"]?.stringValue
+                let limit = arguments["limit"]?.intValue
+
+                let db = try self.createDatabaseConnection()
+                var messages: [[String: Value]] = []
+
+                log.debug("Fetching handles for participants: \(participants)")
+                let handles = try db.fetchParticipant(matching: participants)
+
+                log.debug(
+                    "Fetching messages with date range: \(String(describing: dateRange)), limit: \(limit ?? -1)"
+                )
+                for message in try db.fetchMessages(
+                    with: Set(handles),
+                    in: dateRange,
+                    limit: max(limit ?? defaultLimit, 1024)
+                ) {
+                    guard messages.count < (limit ?? defaultLimit) else { break }
+                    guard !message.text.isEmpty else { continue }
+
+                    let sender: String
+                    if message.isFromMe {
+                        sender = "me"
+                    } else if message.sender == nil {
+                        sender = "unknown"
+                    } else {
+                        sender = message.sender!.rawValue
+                    }
+
+                    if let searchTerm {
+                        guard message.text.localizedCaseInsensitiveContains(searchTerm) else {
+                            continue
+                        }
+                    }
+
+                    messages.append([
+                        "@id": .string(message.id.description),
+                        "sender": [
+                            "@id": .string(sender)
+                        ],
+                        "text": .string(message.text),
+                        "createdAt": .string(message.date.formatted(.iso8601)),
+                    ])
+                }
+
+                log.debug("Successfully fetched \(messages.count) messages")
+                return [
+                    "@context": "https://schema.org",
+                    "@type": "Conversation",
+                    "hasPart": Value.array(messages.map({ .object($0) })),
+                ]
+            },
+            
+            Tool(
+                name: "messages_send",
+                description: "Send an iMessage or SMS to a contact",
+                inputSchema: .object(
+                    properties: [
+                        "phoneNumber": .string(
+                            description: "Recipient identifier: phone number in E.164 format (e.g., +13334445555), email address (e.g., user@icloud.com), or contact name (e.g., 'AIVA'). Works with both iMessage and SMS."
+                        ),
+                        "message": .string(
+                            description: "Message text to send. Use formatting markers: **bold text**, *italic text*, __underlined text__, [BIG]big text[/BIG], [small]small text[/small], [shake]shaking text[/shake], [nod]nodding text[/nod], [explode]exploding text[/explode], [ripple]rippling text[/ripple], [bloom]blooming text[/bloom], [jitter]jittery text[/jitter]. Mix and match any formatting."
+                        ),
+                    ],
+                    required: ["phoneNumber", "message"],
+                    additionalProperties: false
+                ),
+                annotations: .init(
+                    title: "Send iMessage",
+                    readOnlyHint: false,
+                    openWorldHint: false
+                )
+            ) { @MainActor arguments in
+                log.debug("Starting message send with arguments: \(arguments)")
+                
+                guard let phoneNumber = arguments["phoneNumber"]?.stringValue,
+                      let message = arguments["message"]?.stringValue else {
+                    throw MessageSendError.missingRequiredParameters
+                }
+                
+                guard !phoneNumber.isEmpty && !message.isEmpty else {
+                    throw MessageSendError.emptyParameters
+                }
+                
+                try await self.sendMessage(to: phoneNumber, message: message)
+                
+                log.debug("Successfully sent message to \(phoneNumber)")
+                return [
+                    "@context": "https://schema.org",
+                    "@type": "SendAction",
+                    "result": Value.object([
+                        "@type": .string("Message"),
+                        "recipient": Value.object(["@id": .string(phoneNumber)]),
+                        "text": .string(message),
+                        "dateCreated": .string(Date().formatted(.iso8601))
+                    ])
+                ]
+            }
+        ]
     }
 
     private var canAccessDatabaseAtDefaultPath: Bool {
         return FileManager.default.isReadableFile(atPath: messagesDatabasePath)
+    }
+    
+    private func parseFormattedMessage(_ message: String) async throws -> String {
+        var commands: [String] = []
+        
+        // Parse the message character by character to handle overlapping formats
+        var currentIndex = message.startIndex
+        let formatMarkers: [(String, String, String)] = [
+            ("**", "keystroke \"b\" using command down", "keystroke \"b\" using command down"), // Bold
+            ("*", "keystroke \"i\" using command down", "keystroke \"i\" using command down"),   // Italic  
+            ("__", "keystroke \"u\" using command down", "keystroke \"u\" using command down"), // Underline
+            ("[BIG]", "keystroke \"1\" using {option down, command down}", "keystroke \"1\" using {option down, command down}"),
+            ("[/BIG]", "keystroke \"1\" using {option down, command down}", "keystroke \"1\" using {option down, command down}"),
+            ("[small]", "keystroke \"2\" using {option down, command down}", "keystroke \"2\" using {option down, command down}"),
+            ("[/small]", "keystroke \"2\" using {option down, command down}", "keystroke \"2\" using {option down, command down}"),
+            ("[shake]", "keystroke \"3\" using {option down, command down}", "keystroke \"3\" using {option down, command down}"),
+            ("[/shake]", "keystroke \"3\" using {option down, command down}", "keystroke \"3\" using {option down, command down}"),
+            ("[nod]", "keystroke \"4\" using {option down, command down}", "keystroke \"4\" using {option down, command down}"),
+            ("[/nod]", "keystroke \"4\" using {option down, command down}", "keystroke \"4\" using {option down, command down}"),
+            ("[explode]", "keystroke \"5\" using {option down, command down}", "keystroke \"5\" using {option down, command down}"),
+            ("[/explode]", "keystroke \"5\" using {option down, command down}", "keystroke \"5\" using {option down, command down}"),
+            ("[ripple]", "keystroke \"6\" using {option down, command down}", "keystroke \"6\" using {option down, command down}"),
+            ("[/ripple]", "keystroke \"6\" using {option down, command down}", "keystroke \"6\" using {option down, command down}"),
+            ("[bloom]", "keystroke \"7\" using {option down, command down}", "keystroke \"7\" using {option down, command down}"),
+            ("[/bloom]", "keystroke \"7\" using {option down, command down}", "keystroke \"7\" using {option down, command down}"),
+            ("[jitter]", "keystroke \"8\" using {option down, command down}", "keystroke \"8\" using {option down, command down}"),
+            ("[/jitter]", "keystroke \"8\" using {option down, command down}", "keystroke \"8\" using {option down, command down}")
+        ]
+        
+        var textBuffer = ""
+        
+        while currentIndex < message.endIndex {
+            var foundMarker = false
+            
+            // Check for formatting markers at current position
+            for (marker, startCmd, _) in formatMarkers {
+                if message[currentIndex...].hasPrefix(marker) {
+                    // Add any accumulated text before the marker
+                    if !textBuffer.isEmpty {
+                        let escaped = textBuffer.replacingOccurrences(of: "\"", with: "\\\"")
+                        commands.append("keystroke \"\(escaped)\"")
+                        textBuffer = ""
+                    }
+                    
+                    // Add the formatting command
+                    commands.append(startCmd)
+                    
+                    // Skip past the marker
+                    currentIndex = message.index(currentIndex, offsetBy: marker.count)
+                    foundMarker = true
+                    break
+                }
+            }
+            
+            if !foundMarker {
+                // Add the character to text buffer
+                textBuffer.append(message[currentIndex])
+                currentIndex = message.index(after: currentIndex)
+            }
+        }
+        
+        // Add any remaining text
+        if !textBuffer.isEmpty {
+            let escaped = textBuffer.replacingOccurrences(of: "\"", with: "\\\"")
+            commands.append("keystroke \"\(escaped)\"")
+        }
+        
+        // If no commands were generated, just return simple keystroke
+        if commands.isEmpty {
+            let escaped = message.replacingOccurrences(of: "\"", with: "\\\"")
+            return "keystroke \"\(escaped)\""
+        }
+        
+        return commands.joined(separator: "\n                ")
+    }
+    
+    private func sendMessage(to phoneNumber: String, message: String) async throws {
+        let escapedPhoneNumber = phoneNumber.replacingOccurrences(of: "\"", with: "\\\"")
+        let formattedMessage = try await parseFormattedMessage(message)
+        
+        let script = """
+        tell application "Messages"
+            set targetNumber to "\(escapedPhoneNumber)"
+            
+            -- Try to send to existing chat (plain text only for existing chats)
+            try
+                repeat with eachChat in text chats
+                    try
+                        set chatParticipants to participants of eachChat
+                        repeat with eachParticipant in chatParticipants
+                            if (id of eachParticipant) contains targetNumber then
+                                send "\(message.replacingOccurrences(of: "\"", with: "\\\""))" to eachChat
+                                return "Sent to existing chat"
+                            end if
+                        end repeat
+                    end try
+                end repeat
+            end try
+            
+            -- If no existing chat found, create new one with formatting
+            activate
+            delay 0.5
+            tell application "System Events"
+                keystroke "n" using command down
+                keystroke targetNumber
+                delay 0.75
+                keystroke tab
+                \(formattedMessage)
+                delay 0.75
+                keystroke return
+            end tell
+            return "Created new chat"
+        end tell
+        """
+        
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        
+        do {
+            try process.run()
+            process.waitUntilExit()
+            
+            if process.terminationStatus != 0 {
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorString = String(data: errorData, encoding: .utf8) ?? "Unknown AppleScript error"
+                log.error("AppleScript failed: \(errorString)")
+                throw MessageSendError.applescriptFailed(errorString)
+            }
+            
+            log.debug("Successfully sent message via AppleScript")
+        } catch {
+            log.error("Failed to execute AppleScript: \(error.localizedDescription)")
+            throw MessageSendError.applescriptFailed(error.localizedDescription)
+        }
     }
 
     private enum DatabaseAccessError: LocalizedError {
@@ -181,6 +370,23 @@ final class MessageService: NSObject, Service, NSOpenSavePanelDelegate, Sendable
                 return "Messages database access denied or invalid file selected"
             case .fileNotReadable:
                 return "Selected database file is not readable"
+            }
+        }
+    }
+    
+    private enum MessageSendError: LocalizedError {
+        case missingRequiredParameters
+        case emptyParameters
+        case applescriptFailed(String)
+        
+        var errorDescription: String? {
+            switch self {
+            case .missingRequiredParameters:
+                return "Missing required parameters: phoneNumber and message"
+            case .emptyParameters:
+                return "Phone number and message cannot be empty"
+            case .applescriptFailed(let error):
+                return "Failed to send message: \(error)"
             }
         }
     }

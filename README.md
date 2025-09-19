@@ -45,7 +45,7 @@ and a [growing list of clients][mcp-clients] that support the
       <img src="Assets/messages.svg" width="48" height="48" alt="" role="presentation"/>
     </th>
     <td><strong>Messages</strong></td>
-    <td>Access message history with specific participants within customizable date ranges.</td>
+    <td>Access message history with specific participants within customizable date ranges, and send iMessages/SMS to contacts, phone numbers, or email addresses with rich text formatting including bold, italic, underline, and animated text effects.</td>
   </tr>
   <tr>
     <th>
@@ -281,6 +281,32 @@ Control which clients can connect:
 2. View connected clients and their trust status
 3. Remove trusted clients to require re-approval
 4. Connection approvals appear as system notifications
+
+### Messages Formatting
+
+The Messages service supports rich text formatting when sending iMessages. Use these formatting markers in your message text:
+
+**Text Formatting:**
+- `**bold text**` - Bold formatting
+- `*italic text*` - Italic formatting  
+- `__underlined text__` - Underlined text
+
+**Animated Text Effects:**
+- `[BIG]big text[/BIG]` - Large text effect
+- `[small]small text[/small]` - Small text effect
+- `[shake]shaking text[/shake]` - Shake animation
+- `[nod]nodding text[/nod]` - Nod animation
+- `[explode]exploding text[/explode]` - Explode animation
+- `[ripple]rippling text[/ripple]` - Ripple animation
+- `[bloom]blooming text[/bloom]` - Bloom animation
+- `[jitter]jittery text[/jitter]` - Jitter animation
+
+**Example:**
+```
+**Hello** *world*! [shake]This text shakes[/shake] and [BIG]this is big[/BIG]!
+```
+
+You can mix and match any formatting within a single message. Formatting is applied when creating new conversations - existing conversations receive plain text versions.
 
 ## Technical Details
 
