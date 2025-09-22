@@ -177,58 +177,78 @@ extension Image {
 }
 
 // MARK: - Unified Icon Component
+enum UnifiedIconDisplayMode {
+    case standard
+    case compact
+}
+
 struct UnifiedIconView: View {
     let iconName: String
     let color: Color
     let size: CGFloat
     let isEnabled: Bool
+    let displayMode: UnifiedIconDisplayMode
     
     @Environment(\.colorScheme) private var colorScheme
     
-    init(iconName: String, color: Color, size: CGFloat, isEnabled: Bool = true) {
+    init(
+        iconName: String,
+        color: Color,
+        size: CGFloat,
+        isEnabled: Bool = true,
+        displayMode: UnifiedIconDisplayMode = .standard
+    ) {
         self.iconName = iconName
         self.color = color
         self.size = size
         self.isEnabled = isEnabled
+        self.displayMode = displayMode
     }
     
     var body: some View {
         Group {
             // Check if it's a system symbol first
             if NSImage(systemSymbolName: iconName, accessibilityDescription: nil) != nil {
-                // SF Symbols - use same logic as ServiceToggleView
-                RoundedRectangle(cornerRadius: size * 0.225) // iOS-style corner radius
+                let metrics = symbolMetrics()
+
+                RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
                     .fill(backgroundColorForIcon)
-                    .frame(width: size, height: size)
+                    .frame(width: metrics.size, height: metrics.size)
                     .overlay(
                         Image(systemName: iconName)
                             .resizable()
                             .scaledToFit()
                             .symbolRenderingMode(AppIconManager.shared.shouldUseMulticolorRendering(for: iconName) ? .multicolor : .monochrome)
                             .foregroundColor(foregroundColorForIcon)
-                            .padding(iconName == "externaldrive.connected.to.line.below" ? 8 : size * 0.1) // More padding for smaller subprocess icons
+                            .padding(metrics.padding)
                     )
+                    .frame(width: size, height: size)
             } else if iconName.hasPrefix("app_icon_") {
-                // Dynamic app icons - bigger, no background, with visual effects
+                // Dynamic app icons pulled from installed apps
+                let metrics = appIconMetrics()
+
                 Image(appIcon: iconName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: size, height: size)
-                    .clipShape(Circle())
+                    .frame(width: metrics.size, height: metrics.size)
+                    .clipShape(RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous))
                     .grayscale(isEnabled ? 0.0 : 1.0)
                     .opacity(isEnabled ? 1.0 : 0.4)
+                    .frame(width: size, height: size)
             } else {
                 // Custom assets like Chrome logo
-                RoundedRectangle(cornerRadius: size * 0.225)
+                let metrics = customIconMetrics()
+                RoundedRectangle(cornerRadius: metrics.cornerRadius, style: .continuous)
                     .fill(backgroundColorForIcon)
-                    .frame(width: size, height: size)
+                    .frame(width: metrics.size, height: metrics.size)
                     .overlay(
                         Image(iconName)
                             .resizable()
                             .scaledToFit()
                             .foregroundColor(foregroundColorForIcon)
-                            .padding(size * 0.1)
+                            .padding(metrics.size * 0.1)
                     )
+                    .frame(width: size, height: size)
             }
         }
         .animation(.snappy, value: isEnabled)
@@ -264,6 +284,43 @@ struct UnifiedIconView: View {
             return .white
         } else {
             return .primary.opacity(0.4)
+        }
+    }
+
+    private func symbolMetrics() -> (size: CGFloat, cornerRadius: CGFloat, padding: CGFloat) {
+        switch displayMode {
+        case .standard:
+            let targetSize = min(size, 52)
+            let cornerRadius = targetSize * 0.3
+            let padding = iconName == "externaldrive.connected.to.line.below" ? 8 : targetSize * 0.1
+            return (targetSize, cornerRadius, padding)
+        case .compact:
+            let targetSize: CGFloat = 22
+            let cornerRadius = targetSize * 0.3
+            let padding = iconName == "externaldrive.connected.to.line.below" ? max(4, targetSize * 0.1) : targetSize * 0.1
+            return (targetSize, cornerRadius, padding)
+        }
+    }
+
+    private func appIconMetrics() -> (size: CGFloat, cornerRadius: CGFloat) {
+        switch displayMode {
+        case .standard:
+            let targetSize = size
+            return (targetSize, targetSize * 0.225)
+        case .compact:
+            let targetSize: CGFloat = 26
+            return (targetSize, targetSize * 0.225)
+        }
+    }
+
+    private func customIconMetrics() -> (size: CGFloat, cornerRadius: CGFloat) {
+        switch displayMode {
+        case .standard:
+            let targetSize = size
+            return (targetSize, targetSize * 0.225)
+        case .compact:
+            let targetSize = min(size, 24)
+            return (targetSize, targetSize * 0.225)
         }
     }
 }

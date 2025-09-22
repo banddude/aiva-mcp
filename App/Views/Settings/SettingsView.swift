@@ -53,7 +53,7 @@ struct SettingsView: View {
     enum SettingsSection: String, CaseIterable, Identifiable {
         case agents = "Agents"
         case servers = "Servers"
-        case tools = "Tools"
+        case services = "Services"
         case memory = "Memory"
         case logs = "Logs"
 
@@ -63,7 +63,7 @@ struct SettingsView: View {
             switch self {
             case .agents: return "cpu"
             case .servers: return "server.rack"
-            case .tools: return "hammer"
+            case .services: return "square.grid.2x2"
             case .memory: return "brain"
             case .logs: return "text.and.command.macwindow"
             }
@@ -94,8 +94,8 @@ struct SettingsView: View {
                     AgentsView(serverController: serverController, isEnabled: .constant(true))
                 case .servers:
                     ServersView(controller: serverController)
-                case .tools:
-                    ToolsView(serviceConfigs: serverController.computedServiceConfigs)
+                case .services:
+                    ServicesView(serviceConfigs: serverController.computedServiceConfigs)
                 case .memory:
                     MemoryView()
                         .formStyle(.grouped)

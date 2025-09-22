@@ -13,7 +13,6 @@ struct ServiceToggleView: View {
     
     // MARK: Private State
     private let buttonSize: CGFloat = 26
-    private let imagePadding: CGFloat = 5
     
 
     var body: some View {
@@ -42,44 +41,13 @@ struct ServiceToggleView: View {
                 // Let the server controller refresh services/bindings immediately
                 NotificationCenter.default.post(name: .aivaToolTogglesChanged, object: nil)
             }) {
-                Group {
-                    // Check if it's a system symbol first
-                    if NSImage(systemSymbolName: config.iconName, accessibilityDescription: nil) != nil {
-                        // SF Symbols - slightly smaller than app icons
-                        RoundedRectangle(cornerRadius: (buttonSize + 1) * 0.225) // iOS-style corner radius
-                            .fill(buttonBackgroundColor)
-                            .frame(width: buttonSize + 1, height: buttonSize + 1)
-                            .overlay(
-                                Image(systemName: config.iconName)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .symbolRenderingMode(AppIconManager.shared.shouldUseMulticolorRendering(for: config.iconName) ? .multicolor : .monochrome)
-                                    .foregroundColor(AppIconManager.shared.getForegroundColor(for: config.iconName, isEnabled: isEnabled, defaultColor: buttonForegroundColor))
-                                    .padding(config.iconName == "externaldrive.connected.to.line.below" ? imagePadding : imagePadding - 2.5) // Normal subprocess, bigger for SSE
-                            )
-                    } else if config.iconName.hasPrefix("app_icon_") {
-                        // Dynamic app icons - bigger than circle, no background
-                        Image(appIcon: config.iconName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: buttonSize + 6, height: buttonSize + 6) // 6 points bigger than circle
-                            .clipShape(Circle()) // Clip to circle but no background
-                            .grayscale(isOnLocal ? 0.0 : 1.0) // Greyscale when disabled
-                            .opacity(isOnLocal ? 1.0 : 0.4) // Lower opacity when disabled
-                    } else {
-                        // Custom assets like Chrome logo - slightly smaller than app icons
-                        RoundedRectangle(cornerRadius: (buttonSize + 1) * 0.225) // iOS-style corner radius
-                            .fill(buttonBackgroundColor)
-                            .frame(width: buttonSize + 1, height: buttonSize + 1)
-                            .overlay(
-                                Image(config.iconName)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .foregroundColor(buttonForegroundColor)
-                                    .padding(1.5) // Minimal padding for custom assets, adjusted for smaller size
-                            )
-                    }
-                }
+                UnifiedIconView(
+                    iconName: config.iconName,
+                    color: config.color,
+                    size: buttonSize,
+                    isEnabled: iconIsActive,
+                    displayMode: .compact
+                )
                 .animation(.snappy, value: config.binding.wrappedValue || isEnabled)
             }
             .buttonStyle(PlainButtonStyle())
@@ -103,28 +71,7 @@ struct ServiceToggleView: View {
         }
     }
 
-    private var buttonBackgroundColor: Color {
-        if isOnLocal {
-            // Special case for Memory service - always use black background
-            if config.name == "Memory" {
-                return Color.black.opacity(isEnabled ? 0.8 : 0.4)
-            }
-            return config.color.opacity(isEnabled ? 1.0 : 0.4)
-        } else {
-            return Color(NSColor.controlColor)
-                .opacity(isEnabled ? (colorScheme == .dark ? 0.8 : 0.2) : 0.1)
-        }
-    }
-
-    private var buttonForegroundColor: Color {
-        if isOnLocal {
-            // Special case for external drive icons on white/yellow background - use dark icon
-            if AppIconManager.shared.shouldUseMulticolorRendering(for: config.iconName) {
-                return .primary.opacity(isEnabled ? 1.0 : 0.6)
-            }
-            return .white.opacity(isEnabled ? 1.0 : 0.6)
-        } else {
-            return .primary.opacity(isEnabled ? 0.7 : 0.4)
-        }
+    private var iconIsActive: Bool {
+        isOnLocal && isEnabled
     }
 }

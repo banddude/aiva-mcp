@@ -59,8 +59,10 @@ struct ContentView: View {
                         .opacity(isEnabled ? 1.0 : 0.4)
                         .padding(.horizontal, 14)
 
-                    ForEach(serviceConfigs) { config in
-                        ServiceToggleView(config: config)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(serviceConfigs) { config in
+                            ServiceToggleView(config: config)
+                        }
                     }
                 }
                 .padding(.top, 8)
