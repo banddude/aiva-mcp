@@ -85,6 +85,7 @@ struct ContentView: View {
                     NSApp.activate(ignoringOtherApps: true)
                 }
 
+
                 MenuButton("About AIVA", isMenuPresented: $isMenuPresented) {
                     aboutWindowController.showWindow(nil)
                     NSApp.activate(ignoringOtherApps: true)

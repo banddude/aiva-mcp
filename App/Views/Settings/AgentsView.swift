@@ -88,7 +88,8 @@ struct AgentsView: View {
                     action: claudeDesktopToggleWithConfirmation,
                     launchAction: launchClaudeDesktop,
                     connectedClientId: getConnectedClient(for: "Claude Desktop"),
-                    onUnlinkClient: nil
+                    onUnlinkClient: nil,
+                    installAction: nil
                 )
 
                 CLIToggleView(
@@ -100,7 +101,8 @@ struct AgentsView: View {
                     action: claudeCodeToggleWithConfirmation,
                     launchAction: launchClaudeCodeCLI,
                     connectedClientId: getConnectedClient(for: "Claude Code CLI"),
-                    onUnlinkClient: nil
+                    onUnlinkClient: nil,
+                    installAction: installClaudeCode
                 )
 
                 CLIToggleView(
@@ -112,7 +114,8 @@ struct AgentsView: View {
                     action: geminiToggleWithConfirmation,
                     launchAction: launchGeminiCLI,
                     connectedClientId: getConnectedClient(for: "Gemini CLI"),
-                    onUnlinkClient: nil
+                    onUnlinkClient: nil,
+                    installAction: installGemini
                 )
 
                 CLIToggleView(
@@ -124,7 +127,8 @@ struct AgentsView: View {
                     action: codexToggleWithConfirmation,
                     launchAction: launchCodexCLI,
                     connectedClientId: getConnectedClient(for: "Codex CLI"),
-                    onUnlinkClient: nil
+                    onUnlinkClient: nil,
+                    installAction: installCodex
                 )
             }
             
@@ -578,15 +582,32 @@ struct AgentsView: View {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = [
             "-e", "tell application \"Terminal\"",
-            "-e", "activate", 
+            "-e", "activate",
             "-e", "do script \"\(command)\"",
             "-e", "end tell"
         ]
-        
+
         do {
             try process.run()
         } catch {
             print("Failed to open Terminal: \(error)")
         }
+    }
+
+    // MARK: - Install Actions
+
+    private func installClaudeCode() {
+        let command = "npm install -g @anthropic-ai/claude-code"
+        openTerminalWithCommand(command)
+    }
+
+    private func installGemini() {
+        let command = "npm install -g @google/gemini-cli"
+        openTerminalWithCommand(command)
+    }
+
+    private func installCodex() {
+        let command = "npm install -g @openai/codex"
+        openTerminalWithCommand(command)
     }
 }

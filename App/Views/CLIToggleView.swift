@@ -11,6 +11,8 @@ struct CLIToggleView: View {
     let launchAction: (() -> Void)?
     let connectedClientId: String?
     let onUnlinkClient: ((String) -> Void)?
+    let installAction: (() -> Void)?
+    @State private var isInstalled: Bool = false
     
     // MARK: Environment
     @Environment(\.colorScheme) private var colorScheme
@@ -75,19 +77,97 @@ struct CLIToggleView: View {
                 }
             }
             
-            if let launchAction = launchAction, isActive {
-                Button(action: launchAction) {
-                    Image(systemName: "arrow.up.right.square")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 14))
+            HStack(spacing: 8) {
+                if !isInstalled {
+                    if let installAction = installAction {
+                        Button("Install") {
+                            installAction()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(!isAppEnabled)
+                        .help("Install \(name)")
+                    } else if name == "Claude Desktop" {
+                        Button("Download") {
+                            NSWorkspace.shared.open(URL(string: "https://claude.ai/download")!)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(!isAppEnabled)
+                        .help("Download \(name)")
+                    }
                 }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(!isAppEnabled)
-                .help("Launch \(name)")
+
+                if let launchAction = launchAction, isActive, isInstalled {
+                    Button(action: launchAction) {
+                        Image(systemName: "arrow.up.right.square")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(!isAppEnabled)
+                    .help("Launch \(name)")
+                }
             }
         }
         .frame(minHeight: 44)
         .padding(.horizontal, 14)
+        .onAppear {
+            checkIfInstalled()
+        }
+    }
+
+    private func checkIfInstalled() {
+        Task {
+            let installed: Bool
+            if name == "Claude Desktop" {
+                installed = isClaudeDesktopInstalled()
+            } else {
+                let commandName = getCommandName()
+                installed = await isCommandInstalled(commandName)
+            }
+            await MainActor.run {
+                isInstalled = installed
+            }
+        }
+    }
+
+    private func getCommandName() -> String {
+        switch name {
+        case "Claude Code CLI": return "claude"
+        case "Codex CLI": return "codex"
+        case "Gemini CLI": return "gemini"
+        default: return ""
+        }
+    }
+
+    private func isClaudeDesktopInstalled() -> Bool {
+        return FileManager.default.fileExists(atPath: "/Applications/Claude.app")
+    }
+
+    private func isCommandInstalled(_ command: String) async -> Bool {
+        guard !command.isEmpty else { return true }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = [command]
+
+        var environment = ProcessInfo.processInfo.environment
+        let additionalPaths = ["/opt/homebrew/bin", "/usr/local/bin"]
+        environment["PATH"] = "\(additionalPaths.joined(separator: ":")):\(environment["PATH"] ?? "")"
+        process.environment = environment
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
     
     private var buttonBackgroundColor: Color {
