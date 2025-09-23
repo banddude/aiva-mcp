@@ -32,6 +32,65 @@ struct ContentView: View {
         self.aboutWindowController = AboutWindowController()
     }
 
+    // MARK: - Helpers for writing integration configs (sandbox-safe)
+    private static func writeCodexConfig(enable: Bool, serverPath: String) throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let candidates = [
+            home.appendingPathComponent(".config/codex/config.toml"),
+            home.appendingPathComponent(".codex/config.toml"),
+        ]
+        var targetURL = candidates[1]
+        var text = ""
+        for u in candidates {
+            if let loaded = try? String(contentsOf: u) {
+                text = loaded
+                targetURL = u
+                break
+            }
+        }
+        if enable {
+            if !text.contains("[mcp_servers.aiva]") {
+                text.append("\n[mcp_servers.aiva]\ncommand = \"\(serverPath)\"\nargs = []\n")
+            }
+        } else {
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+            var filtered: [Substring] = []
+            var skipping = false
+            for line in lines {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed == "[mcp_servers.aiva]" { skipping = true; continue }
+                if skipping, trimmed.hasPrefix("[") { skipping = false }
+                if !skipping { filtered.append(line) }
+            }
+            text = filtered.joined(separator: "\n")
+        }
+        try FileManager.default.createDirectory(at: targetURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: targetURL, atomically: true, encoding: .utf8)
+    }
+
+    private static func writeClaudeDesktopConfig(enable: Bool, serverPath: String) throws {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Claude/claude_desktop_config.json")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var root: [String: Any] = [:]
+        if let data = try? Data(contentsOf: url),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            root = obj
+        }
+        var servers = root["mcpServers"] as? [String: Any] ?? [:]
+        if enable {
+            servers["aiva"] = [
+                "command": serverPath,
+                "args": []
+            ]
+        } else {
+            servers.removeValue(forKey: "aiva")
+        }
+        root["mcpServers"] = servers
+        let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: url, options: .atomic)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -173,20 +232,34 @@ struct ContentView: View {
     }
     
     static func checkIfAIVAInGemini() -> Bool {
-        let path = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".gemini/settings.json").path
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let servers = json["mcpServers"] as? [String: Any]
-        else { return false }
-        return servers["aiva"] != nil
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let candidates = [
+            home.appendingPathComponent(".gemini/settings.json"),
+            home.appendingPathComponent(".config/gemini/settings.json"),
+        ]
+        for url in candidates {
+            if let data = try? Data(contentsOf: url),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let servers = json["mcpServers"] as? [String: Any],
+               servers["aiva"] != nil {
+                return true
+            }
+        }
+        return false
     }
     
     static func checkIfAIVAInCodex() -> Bool {
-        let path = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".codex/config.toml").path
-        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return false }
-        return text.contains("[mcp_servers.aiva]")
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let candidates = [
+            home.appendingPathComponent(".config/codex/config.toml"),
+            home.appendingPathComponent(".codex/config.toml"),
+        ]
+        for url in candidates {
+            if let text = try? String(contentsOf: url), text.contains("[mcp_servers.aiva]") {
+                return true
+            }
+        }
+        return false
     }
     
     static func checkIfAIVAInClaudeDesktop() -> Bool {
@@ -197,6 +270,362 @@ struct ContentView: View {
               let servers = json["mcpServers"] as? [String: Any]
         else { return false }
         return servers["aiva"] != nil
+    }
+    
+    private func performToggleAction(_ newValue: Bool) {
+        let serverPath = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/MacOS/aiva-server")
+            .path
+        Task {
+            let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
+            do {
+                var root: [String: Any] = [:]
+                if let data = try? Data(contentsOf: url),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    root = obj
+                }
+                var servers = root["mcpServers"] as? [String: Any] ?? [:]
+                if newValue {
+                    servers["aiva"] = [
+                        "type": "stdio",
+                        "command": serverPath,
+                        "args": [],
+                        "env": [:]
+                    ]
+                } else {
+                    servers.removeValue(forKey: "aiva")
+                }
+                root["mcpServers"] = servers
+                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+                try data.write(to: url, options: .atomic)
+            } catch {
+                print("Failed to update Claude Code CLI config: \(error)")
+                await MainActor.run { isInClaudeCodeCLI = !newValue }
+            }
+        }
+    }
+    
+    private func performGeminiToggleAction(_ newValue: Bool) {
+        let serverPath = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/MacOS/aiva-server")
+            .path
+        
+        Task {
+            let command = """
+            # Edit Gemini config JSON directly
+            GEMINI_CONFIG="$HOME/.gemini/settings.json"
+            BACKUP_CONFIG="$HOME/.gemini/settings.json.backup.$(date +%s)"
+            
+            # Backup the config
+            cp "$GEMINI_CONFIG" "$BACKUP_CONFIG"
+            echo "Backed up Gemini config to: $BACKUP_CONFIG"
+            
+            if [ "\(newValue)" = "true" ]; then
+                # Add aiva
+                jq '.mcpServers.aiva = {
+                    "command": "\(serverPath)",
+                    "args": [],
+                    "trust": true
+                }' "$GEMINI_CONFIG" > "$GEMINI_CONFIG.tmp" && mv "$GEMINI_CONFIG.tmp" "$GEMINI_CONFIG"
+                echo "Added AIVA to Gemini CLI config"
+            else
+                # Remove aiva
+                jq 'del(.mcpServers.aiva)' "$GEMINI_CONFIG" > "$GEMINI_CONFIG.tmp" && mv "$GEMINI_CONFIG.tmp" "$GEMINI_CONFIG"
+                echo "Removed AIVA from Gemini CLI config"
+            fi
+            """
+            
+            // Native write (sandbox-safe): update ~/.gemini/settings.json
+            do {
+                let url = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".gemini/settings.json")
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                var root: [String: Any] = [:]
+                if let data = try? Data(contentsOf: url),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    root = obj
+                }
+                var servers = root["mcpServers"] as? [String: Any] ?? [:]
+                if newValue {
+                    servers["aiva"] = [
+                        "command": serverPath,
+                        "args": [],
+                        "trust": true
+                    ]
+                } else {
+                    servers.removeValue(forKey: "aiva")
+                }
+                root["mcpServers"] = servers
+                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+                try data.write(to: url, options: .atomic)
+            } catch {
+                print("Gemini JSON write failed: \(error)")
+            }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/echo")
+            process.arguments = [command]
+            do { try process.run(); process.waitUntilExit() } catch {}
+        }
+    }
+    
+    private func performCodexToggleAction(_ newValue: Bool) {
+        let serverPath = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/MacOS/aiva-server")
+            .path
+        
+        Task {
+            do {
+                try Self.writeCodexConfig(enable: newValue, serverPath: serverPath)
+                return
+            } catch {
+                print("Codex config write failed: \(error)")
+                await MainActor.run { isInCodex = !newValue }
+                return
+            }
+            let command = """
+            # Edit Codex config TOML directly
+            CODEX_CONFIG="$HOME/.codex/config.toml"
+            BACKUP_CONFIG="$HOME/.codex/config.toml.backup.$(date +%s)"
+            
+            # Backup the config
+            cp "$CODEX_CONFIG" "$BACKUP_CONFIG"
+            echo "Backed up Codex config to: $BACKUP_CONFIG"
+            
+            if [ "\(newValue)" = "true" ]; then
+                # Add aiva section to TOML
+                echo "" >> "$CODEX_CONFIG"
+                echo "[mcp_servers.aiva]" >> "$CODEX_CONFIG"
+                echo "command = \\"\(serverPath)\\"" >> "$CODEX_CONFIG"
+                echo "args = []" >> "$CODEX_CONFIG"
+                echo "Added AIVA to Codex CLI config"
+            else
+                # Remove all aiva sections from TOML using awk
+                awk '
+                /^\\[mcp_servers\\.aiva\\]/ { skip=3; next }
+                skip > 0 { skip--; next }
+                { print }
+                ' "$CODEX_CONFIG" > "$CODEX_CONFIG.tmp"
+                mv "$CODEX_CONFIG.tmp" "$CODEX_CONFIG"
+                echo "Removed AIVA from Codex CLI config"
+            fi
+            """
+            
+            // Native write (sandbox-safe): update ~/.codex/config.toml
+            do {
+                let url = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent(".codex/config.toml")
+                var text = (try? String(contentsOf: url)) ?? ""
+                if newValue {
+                    if !text.contains("[mcp_servers.aiva]") {
+                        text.append("\n[mcp_servers.aiva]\ncommand = \"\(serverPath)\"\nargs = []\n")
+                    }
+                } else {
+                    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                    var filtered: [Substring] = []
+                    var skipping = false
+                    for line in lines {
+                        let trimmed = line.trimmingCharacters(in: .whitespaces)
+                        if trimmed == "[mcp_servers.aiva]" { skipping = true; continue }
+                        if skipping, trimmed.hasPrefix("[") { skipping = false }
+                        if !skipping { filtered.append(line) }
+                    }
+                    text = filtered.joined(separator: "\n")
+                }
+                try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                print("Codex TOML write failed: \(error)")
+            }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = ["-c", command]
+            
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            
+            do {
+                try process.run()
+                process.waitUntilExit()
+                
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                
+                if process.terminationStatus == 0 {
+                    print("Codex CLI operation successful: \(output)")
+                } else {
+                    print("Failed Codex CLI operation: \(output)")
+                    // Revert the toggle if the operation failed
+                    await MainActor.run {
+                        isInCodex = !newValue
+                    }
+                }
+            } catch {
+                print("Failed to run Codex command: \(error)")
+                // Revert the toggle if the operation failed
+                await MainActor.run {
+                    isInCodex = !newValue
+                }
+            }
+        }
+    }
+    
+    private func performClaudeDesktopToggleAction(_ newValue: Bool) {
+        let serverPath = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/MacOS/aiva-server")
+            .path
+        
+        Task {
+            do {
+                try Self.writeClaudeDesktopConfig(enable: newValue, serverPath: serverPath)
+                return
+            } catch {
+                print("Claude Desktop config write failed: \(error)")
+                await MainActor.run { isInClaudeDesktop = !newValue }
+                return
+            }
+            let command = """
+            # Edit Claude Desktop config JSON directly
+            CLAUDE_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+            BACKUP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json.backup.$(date +%s)"
+            
+            # Create directory if it doesn't exist
+            mkdir -p "$(dirname "$CLAUDE_CONFIG")"
+            
+            # Create empty config if it doesn't exist
+            if [ ! -f "$CLAUDE_CONFIG" ]; then
+                echo '{"mcpServers":{}}' > "$CLAUDE_CONFIG"
+            fi
+            
+            # Backup the config
+            cp "$CLAUDE_CONFIG" "$BACKUP_CONFIG"
+            echo "Backed up Claude Desktop config to: $BACKUP_CONFIG"
+            
+            echo "DEBUG: newValue is \(newValue)"
+            if [ "\(newValue)" = "true" ]; then
+                # Add aiva
+                jq --arg serverPath "\(serverPath)" '.mcpServers.aiva = {
+                    "command": $serverPath,
+                    "args": []
+                }' "$CLAUDE_CONFIG" > "$CLAUDE_CONFIG.tmp" && mv "$CLAUDE_CONFIG.tmp" "$CLAUDE_CONFIG"
+                echo "Added AIVA to Claude Desktop config"
+            else
+                # Remove aiva
+                jq 'del(.mcpServers.aiva)' "$CLAUDE_CONFIG" > "$CLAUDE_CONFIG.tmp" && mv "$CLAUDE_CONFIG.tmp" "$CLAUDE_CONFIG"
+                echo "Removed AIVA from Claude Desktop config"
+            fi
+            """
+            
+            // Native write (sandbox-safe): update Claude Desktop config JSON
+            do {
+                let url = FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Library/Application Support/Claude/claude_desktop_config.json")
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                var root: [String: Any] = [:]
+                if let data = try? Data(contentsOf: url),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                    root = obj
+                }
+                var servers = root["mcpServers"] as? [String: Any] ?? [:]
+                if newValue {
+                    servers["aiva"] = [
+                        "command": serverPath,
+                        "args": []
+                    ]
+                } else {
+                    servers.removeValue(forKey: "aiva")
+                }
+                root["mcpServers"] = servers
+                let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+                try data.write(to: url, options: .atomic)
+            } catch {
+                print("Claude Desktop JSON write failed: \(error)")
+            }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = ["-c", command]
+            
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            
+            do {
+                try process.run()
+                process.waitUntilExit()
+                
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                
+                if process.terminationStatus == 0 {
+                    print("Claude Desktop operation successful: \(output)")
+                } else {
+                    print("Failed Claude Desktop operation: \(output)")
+                    // Revert the toggle if the operation failed
+                    await MainActor.run {
+                        isInClaudeDesktop = !newValue
+                    }
+                }
+            } catch {
+                print("Failed to run Claude Desktop command: \\(error)")
+                // Revert the toggle if the operation failed
+                await MainActor.run {
+                    isInClaudeDesktop = !newValue
+                }
+            }
+        }
+    }
+    
+    private func showClaudeCodeCLINotInstalledAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Claude Code CLI Not Found"
+        alert.informativeText = "Claude Code CLI is not installed. Please install it first to use this feature.\n\nYou can install it from: https://github.com/anthropics/claude-code"
+        alert.addButton(withTitle: "OK")
+        alert.alertStyle = .informational
+        alert.runModal()
+    }
+    
+    // MARK: - Launch Actions
+    
+    private func launchClaudeDesktop() {
+        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: "/Applications/Claude.app"), configuration: NSWorkspace.OpenConfiguration()) { _, _ in }
+    }
+    
+    private func launchClaudeCodeCLI() {
+        openTerminalWithCommand("claude")
+    }
+    
+    private func launchGeminiCLI() {
+        openTerminalWithCommand("gemini")
+    }
+    
+    private func launchCodexCLI() {
+        openTerminalWithCommand("codex")
+    }
+    
+    private func openTerminalWithCommand(_ command: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = [
+            "-e", "tell application \"Terminal\"",
+            "-e", "activate", 
+            "-e", "do script \"\(command)\"",
+            "-e", "end tell"
+        ]
+        
+        do {
+            try process.run()
+        } catch {
+            print("Failed to open Terminal: \(error)")
+        }
     }
 }
 

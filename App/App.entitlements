@@ -30,7 +30,9 @@
 		<string>/Users/*/Library/Messages/</string>
 		<string>/Users/*/.claude.json</string>
 		<string>/Users/*/.gemini/</string>
+		<string>/Users/*/.config/gemini/</string>
 		<string>/Users/*/.codex/</string>
+		<string>/Users/*/.config/codex/</string>
 		<string>/Users/*/Library/Application Support/Claude/</string>
 		<string>/Users/*/.npm/</string>
 		<string>/tmp/</string>
