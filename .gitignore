@@ -60,3 +60,8 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Private signing credentials must remain outside source control.
+*.p8
+*.p12
+*.pfx

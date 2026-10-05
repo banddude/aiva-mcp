@@ -1,0 +1,14 @@
+name: Signing material guard
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  signing-material:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test signing material guard
+        run: python3 -m unittest discover -s scripts -p 'test_signing_material.py' -v
+      - name: Reject tracked private signing material
+        run: python3 scripts/check-signing-material.py
